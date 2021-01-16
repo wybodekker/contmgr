@@ -1,5 +1,5 @@
 #!/bin/bash
-# vim:tabstop=8
+
 Myname="${0##*/}"
 Version=2.02
 
@@ -91,17 +91,13 @@ DOC
 
     die() { local i; for i; do echo -e "$Myname: $Red$i$Nor"; done 1>&2; exit 1; }
    Warn() { local i; for i; do echo -e "$Myname: $Mag$i$Nor"; done 1>&2; }
-helpsrt() { sed -n '/^= Synopsis/,/^= /p' "$0"|sed '1d;$d'|expand -16; exit; }
-helpall() { sed -n "/^:<<'DOC'$/,/^DOC/p" "$0"|
-            sed -n '1d;$d;p'|
-            expand -16 |
-            less -Ps"$Myname-${Version/./·} documentation - type h for help, q to quit."
-            exit
-          }
+helpsrt() { sed -n '/^= Synopsis/,/^= /p' "$0"|sed '1d;$d'; exit; }
+helpall() { sed -n "/^:<<'DOC'$/,/^DOC/p" "$0"|sed '1d;$d'|
+            less -P"$Myname-${Version/./·} (press h for help, q to quit)";exit; }
 
 :<<'DOC' #----------------------------------------------------------------------
 = handle_options
-synopsis:	 handle_options "$@" || set "${args[@]}"
+synopsis:	 handle_options "$@"
 description:	handle the options.
 globals used:	 Myname Version AreaCodes
 globals  set:	 args noarea grepopt format return size size2 input keep
@@ -191,7 +187,6 @@ handle_options() {
       esac
    done
    args=( "$@" )
-   return ${#args}
 }
 
 :<<'DOC' #---------------------------------------------------------------------
@@ -374,6 +369,7 @@ setvar() {
       eval "$1=$2"
    fi
 }
+
 :<<'DOC' #---------------------------------------------------------------------
 = pr_sorter
 description:	print only first line of terminal format
@@ -382,6 +378,7 @@ DOC
 pr_sorter() {
    printf "%b %b %b %b\n" "$Disp" "$Bday" "$(age)" "$Aim"
 }
+
 :<<'DOC' #---------------------------------------------------------------------
 = pr_term
 description:	print in terminal format
@@ -404,6 +401,7 @@ pr_term() {
    [[ -n "$Hmail$Wmail" ]] && printf "$Blu%-40s%s\n" "$Hmail" "$Wmail"
    [[ -n $Note ]] && echo -e "${Note%'\n'}"
 }
+
 :<<'DOC' #---------------------------------------------------------------------
 = pr_startlabels
 description:	print preamble for address labels
@@ -510,6 +508,7 @@ pr_startbooklet() {
 	  \kop\endhead
 	EOD
 }
+
 :<<'DOC' #---------------------------------------------------------------------
 = pr_booklet
 description:	print in booklet format
@@ -551,6 +550,7 @@ pr_booklet() {
    echo "\\EM{$(join "}\\\\\\EM{" "$Hphone" "$Mphone" "$Wphone" "$Hmail" "$Wmail")}\\NN"
 
 }
+
 :<<'DOC' #---------------------------------------------------------------------
 = pr_startxml
 description:	print preamble for FritzBox xml format
@@ -562,6 +562,7 @@ pr_startxml () {
 	<phonebooks><phonebook name="Contacts">
 	EOD
 }
+
 :<<'DOC' #---------------------------------------------------------------------
 = pr_xml
 description:	print in FritzBox xml format
@@ -601,6 +602,7 @@ pr_xml () {
    fi
    echo '</contact>'
 }
+
 :<<'DOC' #---------------------------------------------------------------------
 = pr_vcard
 description:	print vcard
@@ -643,6 +645,7 @@ pr_vcard () {
    [[ -n $Aim ]] && echo "IMPP;X-SERVICE-TYPE=AIM:aim:$Aim"
    echo -e 'END:VCARD\n'
 }
+
 :<<'DOC' #---------------------------------------------------------------------
 = filltype
 description:	set type to the first argument for which the corresponding
@@ -677,21 +680,23 @@ AreaCodes=(
 )
 
 light # start with colors for a light background
-handle_options "$@" || set "${args[@]}"
+
+handle_options "$@"
+set -- "${args[@]}"
 
 searchkey="$1"
 shopt -s nocasematch
 
+input="$(eval realpath "$input")" # eval allows use of ~
 [[ -n $input ]] || die "environment var CONTACTS was empty and --input option not used"
 [[ -e $input ]] || die "input file $input not found"
-input="$(realpath "$input")"
 tmp="$(mktemp -dt "$Myname".XXXXXXXXXX)"
 if $keep; then
    echo "Running in temp file $tmp"
 else
    trap 'cd && rm -rf $tmp; exit;' 0 1 2 15
 fi
-cd "$tmp" || die "Could not create temporary file"
+cd "$tmp" || die "Could not cd to temporary file"
 
 case $format in
 (labels)  pr_startlabels;;
