@@ -14,31 +14,36 @@ Version=2.02
 = Synopsis
 contmgr [options] [searchkey]	
 
-== General options
--h,--help	print this help and exit
--H,--Help	show full documentation and exit
--V,--version	print version and exit
--i,--input=FILE	take input from FILE with default extension |.vcf|.
--k,--key=STRING	selection key; selects records containing the
-		key in the AIM field
--w,--word	search key must be a complete word
+== General options:
 
-== Format options
--b,--booklet	print booklet
--l,--labels	print address labels
--x,--xml	print xml for FritzBox
--t,--term	print to terminal
--S,--sorter	print only first line of |--term| format
--v,--vcard	print vcards
+-h|--help	print this help and exit
+-H|--Help	show full documentation and exit
+-V|--version	print version and exit
+-i|--input=ARG	take input from file |ARG| with default
+		extension |.vcf|
+-k|--key=ARG	selection key; selects records containing
+		|ARG| in the AIM field
+-w|--word	search key must be a complete word
 
-== Format specific options
-b, l and t in parentheses specify relevant formats:
--d,--dark	(t)	set colors for dark background
--N,--nocolor	(t)	do not use color in terminal output
--s,--size=INT	(bl)	set fontsize (default: 11)
--n,--noarea=INT	(bl)	in phone numbers, remove area codes with the value
-			INT, possibly prefixed with 0 (zero)
--r,--return	(l)	use returnaddres in labels
+== Format options:
+
+-b|--booklet	print booklet
+-l|--labels	print address labels
+-s|--sorter	print only first line of |--term| format
+-t|--term	print to terminal
+-v|--vcard	print vcards
+-x|--xml	print xml for FritzBox
+
+== Format specific options (b, l and t specify relevant formats):
+
+-d|--dark	(t)  do not use color in terminal output
+-f|--font	(bl) set font for title page and captions optionally 
+		     add pointsize; default: DejaVuSerif 12
+-N|--nocolor	(t)  set colors for dark background
+-n|--noarea=ARG	(bl) in phone numbers, remove area codes with the
+		     value |ARG|, possibly prefixed with 0 (zero)
+-r|--return=ARG	(l)  use |ARG| as returnaddres in labels, commas are 
+		     replaced with bullets
 
 = Description
 contmgr lists your contacts to standard output. If you provide a search
@@ -100,90 +105,118 @@ helpall() { sed -n "/^:<<'DOC'$/,/^DOC/p" "$0"|sed '1d;$d'|
 synopsis:	 handle_options "$@"
 description:	handle the options.
 globals used:	 Myname Version AreaCodes
-globals  set:	 args noarea grepopt format return size size2 input keep
-		 mycountry key
+globals  set:	 args noarea grepopt format return fsize font input mycountry key
 returns:	the number of remaining arguments
 DOC
 #-------------------------------------------------------------------------------
 handle_options() {
    local options
-   if ! options=$(getopt \
+   options=$(getopt \
       -n "$Myname" \
-      -o HIbdf:hi:Kk:ln:r:s:StvwNVx \
-      -l Help,booklet,dark,fontsize:,help,input:,keep,key:,labels,noarea:,nocolor,return:,size:,sorter,term,vcard,version,word,xml \
+      -o bdf:HhIi:k:lNn:r:stvVwx \
+      -l booklet,dark,font:,Help,help,input:,key:,labels,noarea:,nocolor,return:,sorter,term,vcard,version,word,xml \
       -- "$@"
-   ); then exit 1; fi
+   ) || exit 1
    eval set -- "$options"
    
-   noarea='' grepopt=-ril format='term' return='' size=11 size2=13
-   input="$CONTACTS" keep=false
+   noarea='' grepopt=-ril format='term' return='' fsize=11 font='DejaVuSerif'
+   input="$CONTACTS"
    mycountry='Nederland' # this is emptied except in vcard format
    
-   while [ $# -gt 0 ]; do
+   while true; do
       case $1 in
-      (-h|--help)    helpsrt
-                     ;;
-      (-H|--Help)    helpall
-                     ;;
-      (-V|--version) echo "$Version"
-                     exit
-                     ;;
-      (-i|--input)   input="${2%.vcf}.vcf"
-                     shift 2
-                     ;;
-      (-K|--keep)    keep=true
-                     shift
-                     ;;
-      (-k|--key)     key="$2"
-                     shift 2
-                     ;;
-      (-w|--word)    grepopt=-wirl
-                     shift
-                     ;;
-      (-b|--booklet) format=booklet
-                     shift
-                     ;;
-      (-l|--labels)  format=labels
-                     shift
-                     ;;
-      (-x|--xml)     format=xml
-                     shift
-                     ;;
-      (-t|--term)    format=term
-                     shift
-                     ;;
-      (-S|--sorter)  format=sorter
-                     shift
-                     ;;
-      (-v|--vcard)   format=vcard
-                     shift
-                     ;;
-      (-N|--nocolor) nocolor
-                     shift
-                     ;;        
-      (-d|--dark)    dark
-                     shift
-                     ;;
-      (-s|--size)    size=$2
-                     [[ $size =~ ^[0-9.]+$ ]] ||
-                        die "size must be a positive float or integer"
-                     size2="$(bc <<<"$size+2")"
-                     shift 2
-                     ;;
-      (-n|--noarea)  noarea=${2#0}
-                     [[ "${AreaCodes[*]}" =~ $noarea ]] ||
-                        die "Unrecognized value for --noarea option"
-                     shift 2
-                     ;;
-      (-r|--return)  return="${2//,/\\bul }"
-                     shift 2
-                     ;;
-      (-I)	     instscript "$0" ||
-   		        die 'the -I option is for developers only'
-   		     exit
-   		     ;;
-      (--)           shift; break;;
-      (*)            break;;
+# General options:
+
+      (-h|--help)       # print this help and exit
+			helpsrt
+			;;
+      (-H|--Help)       # show full documentation and exit
+			helpall
+			;;
+      (-V|--version)    # print version and exit
+			echo "$Version"
+			exit
+			;;
+      (-i|--input=ARG)  # take input from file |ARG| with default
+			# extension |.vcf|
+			input="${2%.vcf}.vcf"
+			shift 2
+			;;
+      (-k|--key=ARG)    # selection key; selects records containing
+			# |ARG| in the AIM field
+			key="$2"
+			shift 2
+			;;
+      (-w|--word)       # search key must be a complete word
+			grepopt=-wirl
+			shift
+			;;
+# Format options:
+
+      (-b|--booklet)    # print booklet
+			format=booklet
+			shift
+			;;
+      (-l|--labels)     # print address labels
+			format=labels
+			shift
+			;;
+      (-s|--sorter)     # print only first line of |--term| format
+			format=sorter
+			shift
+			;;
+      (-t|--term)       # print to terminal
+			format=term
+			shift
+			;;
+      (-v|--vcard)      # print vcards
+			format=vcard
+			shift
+			;;
+      (-x|--xml)        # print xml for FritzBox
+			format=xml
+			shift
+			;;
+# Format specific options (b, l and t specify relevant formats):
+
+      (-d|--dark)       # (t)  do not use color in terminal output
+			dark
+			shift
+			;;
+      (-f|--font)       # (bl) set font for title page and captions optionally 
+			#      add pointsize; default: DejaVuSerif 12
+			if [[ $2 =~ ([A-Za-z_\ -]+)\ *([0-9]*)$ ]]; then
+			   font=${BASH_REMATCH[1]% }
+			   fsize=${BASH_REMATCH[2]}
+			fi
+			: "${fsize:=12}"
+			shift 2
+			;;
+      (-N|--nocolor)    # (t)  set colors for dark background
+			nocolor
+			shift
+			;;        
+      (-n|--noarea=ARG) # (bl) in phone numbers, remove area codes with the
+			#      value |ARG|, possibly prefixed with 0 (zero)
+			noarea=${2#0}
+			[[ "${AreaCodes[*]}" =~ $noarea ]] ||
+			   die "Unrecognized value for --noarea option"
+			shift 2
+			;;
+      (-r|--return=ARG) # (l)  use |ARG| as returnaddres in labels, commas are 
+			#      replaced with bullets
+			return="${2//,/\\bul }"
+			shift 2
+			;;
+      (-I)	        instscript "$0" ||
+			   die 'the -I option is for developers only'
+			exit
+			;;
+      (--)              shift
+			break
+			;;
+      (*)               break
+			;;
       esac
    done
    args=( "$@" )
@@ -340,10 +373,14 @@ texescape() {
 :<<'DOC' #---------------------------------------------------------------------
 = displayname
 description:	print Last, First (Organization), but clean up if some are empty.
-		First=Wybo Last=Dekker Org=DekDoc displayname → Dekker, Wybo (DekDoc)
-		First=Wybo Last=Dekker Org=''     displayname → Dekker, Wybo
-		First=''   Last=Dekker Org=DekDoc displayname → Dekker (DekDoc)
-		First=''   Last=''     Org=DekDoc displayname → DekDoc
+
+		 First=Wybo Last=Dekker Org=DekDoc displayname → Dekker, Wybo (DekDoc)
+
+		 First=Wybo Last=Dekker Org=''     displayname → Dekker, Wybo
+
+		 First=''   Last=Dekker Org=DekDoc displayname → Dekker (DekDoc)
+
+		 First=''   Last=''     Org=DekDoc displayname → DekDoc
 DOC
 #-------------------------------------------------------------------------------
 displayname() {
@@ -418,11 +455,7 @@ pr_startlabels() { local awa=''
 	\adjustspacing=2
 	\newfontfeature{Microtype}{protrusion=default;expansion=default}
 	\directlua{fonts.protrusions.setups.default.factor=.5}
-	\setmainfont[Microtype,
-	             Ligatures=TeX,
-	             ItalicFont=Fontin-Italic,
-	             BoldFont=Fontin-Bold,
-	            ]{Fontin-Regular}
+	\setmainfont{$font}
 	\usepackage{polyglossia}\setmainlanguage{dutch}
 	\usepackage{labels}
 	\LabelRows=8\LabelCols=3\TopBorder=0mm\BottomBorder=0mm\LeftBorder=7mm\RightBorder=7mm
@@ -435,7 +468,7 @@ pr_startlabels() { local awa=''
 	\def\C{$awa}
 	\def\Red#1{}
 	\begin{document}
-	\fontsize{$size}{$size2}\selectfont
+	\fontsize{$fsize}{$((fsize+2))}\selectfont
 	\begin{labels}
 	EOD
 }
@@ -475,11 +508,7 @@ pr_startbooklet() {
 	\adjustspacing=2
 	\newfontfeature{Microtype}{protrusion=default;expansion=default}
 	\directlua{fonts.protrusions.setups.default.factor=.5}
-	\setmainfont[Microtype,
-	             Ligatures=TeX,
-	             ItalicFont=MetaBook-Italic,
-	             BoldFont=MetaBoldLF-Roman,
-	            ]{MetaBook-Roman}
+	\setmainfont{$font}
 	\usepackage{polyglossia}\setmainlanguage{dutch}
 	\usepackage{ctable}
 	\usepackage{colortbl}
@@ -500,7 +529,7 @@ pr_startbooklet() {
 	\setlength{\extrarowheight}{1ex}
 	\def\G{\rowcolor[gray]{.8}}
 	\begin{document}%\renewcommand{\arraystretch}{.8}
-	\fontsize{$size}{$size2}\selectfont
+	\fontsize{$fsize}{$((fsize+2))}\selectfont
 	\begin{longtable}{L{52}L{68}R{36}}
 	  \multicolumn{3}{@{}l@{}}{\Large\bfseries Adreslijst $name
 	  \hfill\today}\tabularnewline
@@ -691,11 +720,7 @@ input="$(eval realpath "$input")" # eval allows use of ~
 [[ -n $input ]] || die "environment var CONTACTS was empty and --input option not used"
 [[ -e $input ]] || die "input file $input not found"
 tmp="$(mktemp -dt "$Myname".XXXXXXXXXX)"
-if $keep; then
-   echo "Running in temp file $tmp"
-else
-   trap 'cd && rm -rf $tmp; exit;' 0 1 2 15
-fi
+warn "Running in temp file $tmp"
 cd "$tmp" || die "Could not cd to temporary file"
 
 case $format in
@@ -857,3 +882,4 @@ case $format in
 (xml)     echo -e '</phonebook></phonebooks>';;
 (booklet) echo '\end{longtable}\end{document}';;
 esac
+rm -r "$tmp"
