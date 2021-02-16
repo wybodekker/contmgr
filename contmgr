@@ -312,15 +312,19 @@ DOC
 #-------------------------------------------------------------------------------
 city() {
    [[ -z $2 ]] && return # no city = no address
-   if [[ $4 == Nederland ]]; then
-      if [[ -n $1 ]]; then
+   case "$1" in
+   ([0-9][0-9][0-9][0-9][A-Z][A-Z]) # dutch
          echo "${1:0:4} ${1:4:2} $2"
-      else
-         echo "$2"
-      fi
-   else
-      echo "$2 $3$1"
-   fi
+	 ;;
+   ([A-Z][A-Z][0-9][0-9][A-Z][A-Z]) # uk
+         echo -e "$2\n${1:0:3} ${1:3:3}"
+	 ;;
+   ([A-Z][A-Z][0-9][0-9][0-9][0-9][0-9]) # USA
+         echo "$2 ${1:0:2} ${1:2:5}"
+	 ;;
+   (*)   echo "$2 $3$1"
+	 ;;
+   esac
 }
 
 :<<'DOC' #---------------------------------------------------------------------
@@ -716,7 +720,7 @@ set -- "${args[@]}"
 searchkey="$1"
 shopt -s nocasematch
 
-input="$(eval realpath "$input")" # eval allows use of ~
+input="$(eval "realpath '$input'")" # eval allows use of ~
 [[ -n $input ]] || die "environment var CONTACTS was empty and --input option not used"
 [[ -e $input ]] || die "input file $input not found"
 tmp="$(mktemp -dt "$Myname".XXXXXXXXXX)"
