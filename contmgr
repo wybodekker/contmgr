@@ -37,8 +37,9 @@ contmgr [options] [searchkey]
 == Format specific options (b, l and t specify relevant formats):
 
 -d|--dark	(t)  do not use color in terminal output
--f|--font	(bl) set font for title page and captions optionally 
-		     add pointsize; default: DejaVuSerif 12
+-f|--font	(bl) set font and optionally bold font or pointsize:
+		     --font=MetaBook-Roman,MetaBold-Roman 14
+		     default: DejaVuSerif 12
 -N|--nocolor	(t)  set colors for dark background
 -n|--noarea=ARG	(bl) in phone numbers, remove area codes with the
 		     value |ARG|, possibly prefixed with 0 (zero)
@@ -183,13 +184,16 @@ handle_options() {
 			dark
 			shift
 			;;
-      (-f|--font)       # (bl) set font for title page and captions optionally 
-			#      add pointsize; default: DejaVuSerif 12
-			if [[ $2 =~ ([A-Za-z_\ -]+)\ *([0-9]*)$ ]]; then
-			   font=${BASH_REMATCH[1]% }
-			   fsize=${BASH_REMATCH[2]}
+      (-f|--font)       # (bl) set font and optionally bold font or pointsize:
+			#      --font=MetaBook-Roman,MetaBold-Roman 14
+			#      default: DejaVuSerif 12
+			if [[ $2 =~ ([A-Za-z_\ -]+)(,[A-Za-z_\ -]+)?( [0-9]+)?$ ]]; then
+			   font=${BASH_REMATCH[1]}
+			   bold=${BASH_REMATCH[2]#,}
+			   fsize=${BASH_REMATCH[3]% }
 			fi
 			: "${fsize:=12}"
+			: "${bold:=$font}"
 			shift 2
 			;;
       (-N|--nocolor)    # (t)  set colors for dark background
@@ -459,7 +463,7 @@ pr_startlabels() { local awa=''
 	\adjustspacing=2
 	\newfontfeature{Microtype}{protrusion=default;expansion=default}
 	\directlua{fonts.protrusions.setups.default.factor=.5}
-	\setmainfont{$font}
+	\setmainfont{$font}[BoldFont=$bold]
 	\usepackage{polyglossia}\setmainlanguage{dutch}
 	\usepackage{labels}
 	\LabelRows=8\LabelCols=3\TopBorder=0mm\BottomBorder=0mm\LeftBorder=7mm\RightBorder=7mm
@@ -479,21 +483,25 @@ pr_startlabels() { local awa=''
 
 :<<'DOC' #---------------------------------------------------------------------
 = pr_label
-description:	print in address label format
+description:	print in home and work addresses label format
 DOC
 #-------------------------------------------------------------------------------
 pr_label() {
-   [[ -n $Hstreet ]] || return
-   [[ -n $Hzip    ]] || return
-   local street="$Hstreet"
-   street=${street//#/\\#}
-   street=${street//_/\\_}
-   local name="$Prefix $First $Last $Middle $Suffix"
-   [[ $name == '    ' ]] && name="$Org"
-   echo -e "\\C\n\\Red{$Last}$name\n$street"
-   city "$Hzip" "$Hcity" "$Hstate" "$Hcountry"
-   [[ $Hcountry == Nederland ]] || echo "$Hcountry"
-   echo
+   local i j street zip city state country
+   for i in H W; do
+      for j in street zip city state country; do
+         eval $j="\$$i$j"
+      done
+      [[ -n $street ]] || continue
+      street=${street//#/\\#}
+      street=${street//_/\\_}
+      local name="$Prefix $First $Last $Middle $Suffix"
+      [[ $name == '    ' ]] && name="$Org"
+      echo -e "\\C\n\\Red{$Last}$name\n$street"
+      city "$zip" "$city" "$state" "$country"
+      [[ $country == Nederland ]] || echo "$country"
+      echo
+   done
 }
 
 :<<'DOC' #---------------------------------------------------------------------
@@ -512,7 +520,7 @@ pr_startbooklet() {
 	\adjustspacing=2
 	\newfontfeature{Microtype}{protrusion=default;expansion=default}
 	\directlua{fonts.protrusions.setups.default.factor=.5}
-	\setmainfont{$font}
+	\setmainfont{$font}[BoldFont=$bold]
 	\usepackage{polyglossia}\setmainlanguage{dutch}
 	\usepackage{ctable}
 	\usepackage{colortbl}
@@ -525,8 +533,8 @@ pr_startbooklet() {
 	  &Telefoon\tabularnewline\hline
 	}
 	\def\EM#1{\makebox[0pt][r]{#1}}
-	\def\Red#1{\textbf{\textcolor[HTML]{BB0000}{#1} }}
-	\def\Blu#1{\textcolor[HTML]{0000FF}{#1}}
+	\def\Red#1{\textbf{\textcolor[rgb]{1,0,0}{#1} }}
+	\def\Blu#1{\textcolor[rgb]{0,0,1}{#1}}
 	\def\C#1{}
 	\newcolumntype{L}[1]{>{\raggedright}p{#1mm}}
 	\newcolumntype{R}[1]{>{\raggedleft}p{#1mm}}
@@ -554,34 +562,39 @@ pr_booklet() {
    [[ -z $name ]] && name="$Org"
    texescape name
    texescape Org
-
-   adr="$(join "\\\\" \
-       "$Hstreet" \
-       "$(city "$Hzip" "$Hcity" "$Hstate" "$Hcountry")" \
-       "${Hcountry%Nederland}" \
-   )"
-   shopt -u nocasematch
-   adr=${adr//\\n/\\\\}
-   shopt -s nocasematch
-   texescape adr
-   fix Hphone
-   fix Mphone
-   fix Wphone
-   Hmail=${Hmail//_/\\_}
-   Wmail=${Wmail//_/\\_}
-   echo -n "$g\Red{$name} $First"
-   [[ -n $Middle ]] && echo -n " $Middle"
-   [[ -n $Nick ]] && echo -n " $Nick"
-   [[ -n $Org ]] && [[ ! $name == "$Org" ]] && echo -n " ($Org)"
-   if [[ -n $Note ]]; then
-      local x=()
-      texescape Note
-      IFS=$'|' read -ra x <<<"${Note//'\n'/|}"
-      printf '\\\\\Blu{%s}' "${x[@]}"
-   fi
-   echo -n "&$adr&"
-   echo "\\EM{$(join "}\\\\\\EM{" "$Hphone" "$Mphone" "$Wphone" "$Hmail" "$Wmail")}\\NN"
-
+   local i j street zip city state country
+   for i in H W; do
+      for j in street zip city state country; do
+         eval $j="\$$i$j"
+      done
+      [[ -n $street ]] || continue
+      adr="$(join "\\\\" \
+          "$street" \
+          "$(city "$zip" "$city" "$state" "$country")" \
+          "${country%Nederland}" \
+      )"
+      shopt -u nocasematch
+      adr=${adr//\\n/\\\\}
+      shopt -s nocasematch
+      texescape adr
+      fix Hphone
+      fix Mphone
+      fix Wphone
+      Hmail=${Hmail//_/\\_}
+      Wmail=${Wmail//_/\\_}
+      echo -n "$g\Red{$name} $First"
+      [[ -n $Middle ]] && echo -n " $Middle"
+      [[ -n $Nick ]] && echo -n " $Nick"
+      [[ -n $Org ]] && [[ ! $name == "$Org" ]] && echo -n " ($Org)"
+      if [[ -n $Note ]]; then
+         local x=()
+         texescape Note
+         IFS=$'|' read -ra x <<<"${Note//'\n'/|}"
+         printf '\\\\\Blu{%s}' "${x[@]}"
+      fi
+      echo -n "&$adr&"
+      echo "\\EM{$(join "}\\\\\\EM{" "$Hphone" "$Mphone" "$Wphone" "$Hmail" "$Wmail")}\\NN"
+   done
 }
 
 :<<'DOC' #---------------------------------------------------------------------
@@ -724,8 +737,8 @@ input="$(eval "realpath '$input'")" # eval allows use of ~
 [[ -n $input ]] || die "environment var CONTACTS was empty and --input option not used"
 [[ -e $input ]] || die "input file $input not found"
 tmp="$(mktemp -dt "$Myname".XXXXXXXXXX)"
-warn "Running in temp file $tmp"
-cd "$tmp" || die "Could not cd to temporary file"
+
+cd "$tmp" || die "Could not cd to $tmp"
 
 case $format in
 (labels)  pr_startlabels;;
