@@ -19,8 +19,10 @@ contmgr [options] [searchkey]
 -h|--help	print this help and exit
 -H|--Help	show full documentation and exit
 -V|--version	print version and exit
--i|--input=ARG	take input from file |ARG| with default
-		extension |.vcf|
+-i|--input=ARG	take input from file |ARG| with default extension
+		|.vcf|; if ARG has no path info, the file is
+		suppposed to reside in the same directory as the
+		default input file.
 -k|--key=ARG	selection key; selects records containing
 		|ARG| in the AIM field
 -w|--word	search key must be a complete word
@@ -88,6 +90,22 @@ Wphone	 vxt-- TEL;TYPE=WORK
 Mphone	 vxt-- TEL;TYPE=CELL
 Note	 v-tb- NOTE
 
+= Configuration
+The defaults for some variables, like font, fontsize, vcard file, and
+country may be inconvenient. You can set your own defaults in a config
+file, either in system file: |$PREFIX/contmgr.conf| or in a user file:
+|$HOME/.contmgr.conf|. These files are read in this order and they can
+contain input such as this:
+
+   fsize=11
+   font='DejaVuSerif'
+   bold='DejaVuSerif'
+   input="$HOME/Contacts.vcf"
+   mycountry='Nederland'
+
+The content shown here would have no effect, as its values are the
+defaults already.
+
 = Author
 [Wybo Dekker](wybo@dekkerdocumenten.nl)
 
@@ -120,9 +138,11 @@ handle_options() {
    ) || exit 1
    eval set -- "$options"
    
-   noarea='' grepopt=-ril format='term' return='' fsize=11 font='DejaVuSerif'
-   input="$CONTACTS"
+   noarea='' grepopt=-ril format='term' return=''
+   fsize=11 font='DejaVuSerif' input="$HOME/Contacts.vcf"
    mycountry='Nederland' # this is emptied except in vcard format
+   [[ -e $PREFIX/contmgr.conf ]] && source "$PREFIX/contmgr.conf"
+   [[ -e $HOME/.contmgr.conf ]] && source "$HOME/.contmgr.conf"
    
    while true; do
       case $1 in
@@ -138,9 +158,16 @@ handle_options() {
 			echo "$Version"
 			exit
 			;;
-      (-i|--input=ARG)  # take input from file |ARG| with default
-			# extension |.vcf|
-			input="${2%.vcf}.vcf"
+      (-i|--input=ARG)  # take input from file |ARG| with default extension
+			# |.vcf|; if ARG has no path info, the file is
+			# suppposed to reside in the same directory as the
+			# default input file.
+			if [[ $2 =~ / ]]; then # pathinfo given?
+			   input="$2"
+			else # no path info? then look in default input directory
+			   input="${input%/*}/$2"
+			fi
+			input="${input%.vcf}.vcf"
 			shift 2
 			;;
       (-k|--key=ARG)    # selection key; selects records containing
@@ -308,8 +335,8 @@ age () {
 :<<'DOC' #---------------------------------------------------------------------
 = city
 synopsis:	 city zip city state country
-description:	if country is Netherlands, insert space in zip and print "zip city",
-		if not, print "city, state, zip"
+description:	Try to format city, state and zip as needed for country.
+		if rules not known, print "city, state, zip"
 		city 4158CH Deil '' Nederland → 4158 CH Deil
 		city 94595 'Walnut Creek' CA USA → Walnut Creek CA 94595
 DOC
@@ -317,10 +344,10 @@ DOC
 city() {
    [[ -z $2 ]] && return # no city = no address
    case "$1" in
-   ([0-9][0-9][0-9][0-9][A-Z][A-Z]) # dutch
+   ([0-9][0-9][0-9][0-9][A-Z][A-Z]) # Netherlands
          echo "${1:0:4} ${1:4:2} $2"
 	 ;;
-   ([A-Z][A-Z][0-9][0-9][A-Z][A-Z]) # uk
+   ([A-Z][A-Z][0-9][0-9][A-Z][A-Z]) # UK
          echo -e "$2\n${1:0:3} ${1:3:3}"
 	 ;;
    ([A-Z][A-Z][0-9][0-9][0-9][0-9][0-9]) # USA
@@ -436,8 +463,8 @@ pr_term() {
    printf "$Yel%-40s%-11s%-6s%27s$Nor\n" "$Disp" "$Bday" "$(age)" "$Aim"
    [[ -n "$Hstreet$Wstreet" ]] && printf "%-40s%s\n" "$Hstreet" "$Wstreet"
    [[ -n "$hc$wc" ]] && printf "%-40s%s\n" "$hc" "$wc"
-   h="${Hcountry%Nederland}"
-   w="${Wcountry%Nederland}"
+   h="${Hcountry%$mycountry}"
+   w="${Wcountry%$mycountry}"
    [[ -n "$h$w" ]] && printf "%-40s%s\n" "$Hcountry" "$Wcountry"
    fix Hphone
    fix Mphone
@@ -499,7 +526,7 @@ pr_label() {
       [[ $name == '    ' ]] && name="$Org"
       echo -e "\\C\n\\Red{$Last}$name\n$street"
       city "$zip" "$city" "$state" "$country"
-      [[ $country == Nederland ]] || echo "$country"
+      [[ $country == "$mycountry" ]] || echo "$country"
       echo
    done
 }
@@ -571,7 +598,7 @@ pr_booklet() {
       adr="$(join "\\\\" \
           "$street" \
           "$(city "$zip" "$city" "$state" "$country")" \
-          "${country%Nederland}" \
+          "${country%$mycountry}" \
       )"
       shopt -u nocasematch
       adr=${adr//\\n/\\\\}
