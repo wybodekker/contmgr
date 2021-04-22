@@ -16,13 +16,12 @@ contmgr [options] [searchkey]
 
 == General options:
 
--h|--help	print this help and exit
--H|--Help	show full documentation and exit
--V|--version	print version and exit
--i|--input=ARG	take input from file |ARG| with default extension
-		|.vcf|; if ARG has no path info, the file is
-		suppposed to reside in the same directory as the
-		default input file.
+-h|--help	Print this help and exit
+-H|--Help	Show full documentation and exit
+-V|--version	Print version and exit
+-i|--input=ARG	Take input from file |ARG| with default extension vcf;
+		if ARG has no path info, the file is suppposed to reside
+		in the same directory as the default input file.
 -k|--key=ARG	selection key; selects records containing
 		|ARG| in the AIM field
 -w|--word	search key must be a complete word
@@ -97,14 +96,37 @@ file, either in system file: |$PREFIX/contmgr.conf| or in a user file:
 |$HOME/.contmgr.conf|. These files are read in this order and they can
 contain input such as this:
 
-   fsize=11
-   font='DejaVuSerif'
-   bold='DejaVuSerif'
-   input="$HOME/Contacts.vcf"
-   mycountry='Nederland'
+   Fsize=11
+   Font='DejaVuSerif'
+   Bold='DejaVuSerif-Bold'
+   Input="$HOME/Contacts.vcf"
+   Mycountry='Nederland'
 
 The content shown here would have no effect, as its values are the
 defaults already.
+
+= Todo
+== Country code
+The vCard format lacks an entry for the country code, needed for formatting
+the zip code and for zip code positioning.n address labels. There is of
+course an entry for the country, but that can by expressed in any language,
+preferably the local language.
+
+My solution for now is to expect two vcard entries in the vcard file:
+|X-CCODE-HOME| and |X-CCode-WORK|, which set the country codes for home
+and work addresses. By default, the users own country code |Mycode|, as set
+in the configuration file, is used. So normally, these entries are needed
+only for foreign addresses.
+
+== Phone number formatting
+I suppose phonenumbers to have the format |+can|, where |c| is 1-3
+country code digits, a is 1-3 area code digits and n is 1 or more phone
+number digits.
+If the |c|'s match the value of |Mycode| (say xx), this is converted to
+|0xx an|; if not, to |00xx an|. After this, I match the |a|'s with an array
+|AreaCodes| and I use the match (say yyy) to convert to |00xx yyy n|.
+Finally, the |n|'s are spaced, depending on the number of |n|'s.
+Problem: the |AreaCodes| array is valid for the Netherlands only.
 
 = Author
 [Wybo Dekker](wybo@dekkerdocumenten.nl)
@@ -124,7 +146,7 @@ helpall() { sed -n "/^:<<'DOC'$/,/^DOC/p" "$0"|sed '1d;$d'|
 synopsis:	 handle_options "$@"
 description:	handle the options.
 globals used:	 Myname Version AreaCodes
-globals  set:	 args noarea grepopt format return fsize font input mycountry key
+globals  set:	 Args Noarea Grepopt Format Return Fsize Font Input Mycountry Key
 returns:	the number of remaining arguments
 DOC
 #-------------------------------------------------------------------------------
@@ -138,71 +160,80 @@ handle_options() {
    ) || exit 1
    eval set -- "$options"
    
-   noarea='' grepopt=-ril format='term' return=''
-   fsize=11 font='DejaVuSerif' input="$HOME/Contacts.vcf"
-   mycountry='Nederland' # this is emptied except in vcard format
-   [[ -e $PREFIX/contmgr.conf ]] && source "$PREFIX/contmgr.conf"
+   Key='' Noarea='' Grepopt=-ril Format='term' Return=''
+   Fsize=12 Font='DejaVuSerif' Input="$HOME/Contacts.vcf"
+
+   Mycountry='Nederland' # this is emptied except in vcard format
+   # shellcheck disable=SC2153
+   if [[ -n $PREFIX ]]; then
+      if [[ -e $PREFIX/contmgr.conf ]]; then
+         # shellcheck disable=SC1090
+         source "$PREFIX/contmgr.conf"
+      fi
+   else
+      Warn "Env var PREFIX is undefined; look for ~/.contmgr.conf only"
+   fi
+   # shellcheck disable=SC1090
    [[ -e $HOME/.contmgr.conf ]] && source "$HOME/.contmgr.conf"
    
    while true; do
       case $1 in
 # General options:
 
-      (-h|--help)       # print this help and exit
+      (-h|--help)       # Print this help and exit
 			helpsrt
 			;;
-      (-H|--Help)       # show full documentation and exit
+      (-H|--Help)       # Show full documentation and exit
 			helpall
 			;;
-      (-V|--version)    # print version and exit
+      (-V|--version)    # Print version and exit
 			echo "$Version"
 			exit
 			;;
-      (-i|--input=ARG)  # take input from file |ARG| with default extension
-			# |.vcf|; if ARG has no path info, the file is
-			# suppposed to reside in the same directory as the
-			# default input file.
+      (-i|--input=ARG)  # Take input from file |ARG| with default extension vcf;
+			# if ARG has no path info, the file is suppposed to reside
+			# in the same directory as the default input file.
 			if [[ $2 =~ / ]]; then # pathinfo given?
-			   input="$2"
+			   Input="$2"
 			else # no path info? then look in default input directory
-			   input="${input%/*}/$2"
+			   Input="${Input%/*}/$2"
 			fi
-			input="${input%.vcf}.vcf"
+			Input="${Input%.vcf}.vcf"
 			shift 2
 			;;
       (-k|--key=ARG)    # selection key; selects records containing
 			# |ARG| in the AIM field
-			key="$2"
+			Key="$2"
 			shift 2
 			;;
       (-w|--word)       # search key must be a complete word
-			grepopt=-wirl
+			Grepopt=-wirl
 			shift
 			;;
 # Format options:
 
       (-b|--booklet)    # print booklet
-			format=booklet
+			Format=booklet
 			shift
 			;;
       (-l|--labels)     # print address labels
-			format=labels
+			Format=labels
 			shift
 			;;
       (-s|--sorter)     # print only first line of |--term| format
-			format=sorter
+			Format=sorter
 			shift
 			;;
       (-t|--term)       # print to terminal
-			format=term
+			Format=term
 			shift
 			;;
       (-v|--vcard)      # print vcards
-			format=vcard
+			Format=vcard
 			shift
 			;;
       (-x|--xml)        # print xml for FritzBox
-			format=xml
+			Format=xml
 			shift
 			;;
 # Format specific options (b, l and t specify relevant formats):
@@ -215,12 +246,12 @@ handle_options() {
 			#      --font=MetaBook-Roman,MetaBold-Roman 14
 			#      default: DejaVuSerif 12
 			if [[ $2 =~ ([A-Za-z_\ -]+)(,[A-Za-z_\ -]+)?( [0-9]+)?$ ]]; then
-			   font=${BASH_REMATCH[1]}
-			   bold=${BASH_REMATCH[2]#,}
-			   fsize=${BASH_REMATCH[3]% }
+			   Font=${BASH_REMATCH[1]}
+			   Bold=${BASH_REMATCH[2]#,}
+			   Fsize=${BASH_REMATCH[3]% }
 			fi
-			: "${fsize:=12}"
-			: "${bold:=$font}"
+			: "${Fsize:=12}"
+			: "${Bold:=$Font}"
 			shift 2
 			;;
       (-N|--nocolor)    # (t)  set colors for dark background
@@ -229,14 +260,14 @@ handle_options() {
 			;;        
       (-n|--noarea=ARG) # (bl) in phone numbers, remove area codes with the
 			#      value |ARG|, possibly prefixed with 0 (zero)
-			noarea=${2#0}
-			[[ "${AreaCodes[*]}" =~ $noarea ]] ||
+			Noarea=${2#0}
+			[[ "${AreaCodes[*]}" =~ $Noarea ]] ||
 			   die "Unrecognized value for --noarea option"
 			shift 2
 			;;
       (-r|--return=ARG) # (l)  use |ARG| as returnaddres in labels, commas are 
 			#      replaced with bullets
-			return="${2//,/\\bul }"
+			Return="${2//,/\\bul }"
 			shift 2
 			;;
       (-I)	        instscript "$0" ||
@@ -250,7 +281,7 @@ handle_options() {
 			;;
       esac
    done
-   args=( "$@" )
+   Args=( "$@" )
 }
 
 :<<'DOC' #---------------------------------------------------------------------
@@ -258,7 +289,7 @@ handle_options() {
 description:	set colors for light background
 DOC
 #-------------------------------------------------------------------------------
-light () {
+light() {
    Red='\e[38;5;1m'
    Mag='\e[38;5;5m'
    Nor='\e[0m'
@@ -271,7 +302,7 @@ light () {
 description:	set colors for dark background
 DOC
 #-------------------------------------------------------------------------------
-dark () {
+dark() {
    Red='\e[1;38;5;9m'
    Mag='\e[1;38;5;13m'
    Nor='\e[0m'
@@ -284,7 +315,7 @@ dark () {
 description:	set no colors
 DOC
 #-------------------------------------------------------------------------------
-nocolor () {
+nocolor() {
    Red=''
    Mag=''
    Nor=''
@@ -295,7 +326,8 @@ nocolor () {
 :<<'DOC' #---------------------------------------------------------------------
 = join
 synopsis:	 join separator string [string...]
-description:	use first arg as separator to print other non-empty args separated with it
+description:	use first argument as separator to print other non-empty
+		arguments separated with it
 		 join '=' a b '' d → a=b=d
 DOC
 #-------------------------------------------------------------------------------
@@ -310,13 +342,13 @@ join() {
 }
 
 :<<'DOC' #---------------------------------------------------------------------
-= age
+= pr_age
 description:	print age; On March 13, 2019:
 		after Bday=2011-03-22
-		age prints (7)
+		pr_age prints (7)
 DOC
 #-------------------------------------------------------------------------------
-age () {
+pr_age() {
    local byear bmonth bday cyear cmonth cday corr
    if [[ -n $Bday  ]]; then
       IFS=- read -r byear bmonth bday <<<"$Bday"
@@ -333,15 +365,15 @@ age () {
 }
 
 :<<'DOC' #---------------------------------------------------------------------
-= city
-synopsis:	 city zip city state country
-description:	Try to format city, state and zip as needed for country.
+= pr_city
+synopsis:	 pr_city zip city state country
+description:	Try to format city, state and zip
 		if rules not known, print "city, state, zip"
-		city 4158CH Deil '' Nederland → 4158 CH Deil
-		city 94595 'Walnut Creek' CA USA → Walnut Creek CA 94595
+		 pr_city 4158CH Deil '' → 4158 CH Deil
+		 pr_city 94595 'Walnut Creek' CA 1 → Walnut Creek CA 94595
 DOC
 #-------------------------------------------------------------------------------
-city() {
+pr_city() {
    [[ -z $2 ]] && return # no city = no address
    case "$1" in
    ([0-9][0-9][0-9][0-9][A-Z][A-Z]) # Netherlands
@@ -362,7 +394,7 @@ city() {
 = fix
 synopsis:	 fix phonenumber
 description:	insert spaces in phone number; argument is name of the number
-		Hphone=0630333955
+		 Hphone=0630333955
 		 fix Hphone && echo $Hphone → 06 3033 3955
 DOC
 #-------------------------------------------------------------------------------
@@ -375,14 +407,20 @@ fix() {
     (*) for i in "${AreaCodes[@]}"; do
            if [[ $p =~ ^0$i(.*) ]]; then
               area="0$i " n=${BASH_REMATCH[1]}
-              [[ $area == "0$noarea " ]] && area=''
+              [[ $area == "0$Noarea " ]] && area=''
               case ${#n} in
-              (4)    v="$n";;
-              (6|9)  v="${n:0:3} ${n:3:3} ${n:6:3}";;
-              (7)    v="${n:0:3} ${n:3:4}";;
-              (8|10) v="${n:0:4} ${n:4:4} ${n:8:2}";;
+              (4)    v="$n"
+		     ;;
+              (6|9)  v="${n:0:3} ${n:3:3} ${n:6:3}"
+		     ;;
+              (7)    v="${n:0:3} ${n:3:4}"
+		     ;;
+              (8|10) v="${n:0:4} ${n:4:4} ${n:8:2}"
+		     ;;
+
               (*)    Warn "Invalid phone number: $area$n"
                      v="$n"
+		     ;;
               esac
               eval "$1=\$area\${v% }"
            fi
@@ -448,7 +486,7 @@ description:	print only first line of terminal format
 DOC
 #-------------------------------------------------------------------------------
 pr_sorter() {
-   printf "%b %b %b %b\n" "$Disp" "$Bday" "$(age)" "$Aim"
+   printf "%b %b %b %b\n" "$Disp" "$Bday" "$(pr_age)" "$Aim"
 }
 
 :<<'DOC' #---------------------------------------------------------------------
@@ -457,14 +495,14 @@ description:	print in terminal format
 DOC
 #-------------------------------------------------------------------------------
 pr_term() {
-   hc=$(city "$Hzip" "$Hcity" "$Hstate" "$Hcountry")
-   wc=$(city "$Wzip" "$Wcity" "$Wstate" "$Wcountry")
+   hc=$(pr_city "$Hzip" "$Hcity" "$Hstate" "$Hcountry")
+   wc=$(pr_city "$Wzip" "$Wcity" "$Wstate" "$Wcountry")
    echo -e "$Nor================================================================================"
-   printf "$Yel%-40s%-11s%-6s%27s$Nor\n" "$Disp" "$Bday" "$(age)" "$Aim"
+   printf "$Yel%-40s%-11s%-6s%27s$Nor\n" "$Disp" "$Bday" "$(pr_age)" "$Aim"
    [[ -n "$Hstreet$Wstreet" ]] && printf "%-40s%s\n" "$Hstreet" "$Wstreet"
    [[ -n "$hc$wc" ]] && printf "%-40s%s\n" "$hc" "$wc"
-   h="${Hcountry%$mycountry}"
-   w="${Wcountry%$mycountry}"
+   h="${Hcountry%$Mycountry}"
+   w="${Wcountry%$Mycountry}"
    [[ -n "$h$w" ]] && printf "%-40s%s\n" "$Hcountry" "$Wcountry"
    fix Hphone
    fix Mphone
@@ -480,7 +518,7 @@ description:	print preamble for address labels
 DOC
 #-------------------------------------------------------------------------------
 pr_startlabels() { local awa=''
-   [[ -n $return ]] && awa='\awa'
+   [[ -n $Return ]] && awa='\awa'
    cat <<-EOD
 	%%!lualatex
 	%%=== labels ===
@@ -490,20 +528,20 @@ pr_startlabels() { local awa=''
 	\adjustspacing=2
 	\newfontfeature{Microtype}{protrusion=default;expansion=default}
 	\directlua{fonts.protrusions.setups.default.factor=.5}
-	\setmainfont{$font}[BoldFont=$bold]
+	\setmainfont{$Font}[BoldFont=$Bold]
 	\usepackage{polyglossia}\setmainlanguage{dutch}
 	\usepackage{labels}
 	\LabelRows=8\LabelCols=3\TopBorder=0mm\BottomBorder=0mm\LeftBorder=7mm\RightBorder=7mm
 	\newcommand{\bul}{{\hfill$\bullet$}\hfill}
 	\newcommand{\awa}{\begin{minipage}{56mm}
-	  \textbf{\tiny $return}\\\\%[-.5ex]
+	  \textbf{\tiny $Return}\\\\%[-.5ex]
 	  \protect\rule[2ex]{56mm}{.2mm}
 	  \end{minipage}\\\\[-3ex]
 	}
 	\def\C{$awa}
 	\def\Red#1{}
 	\begin{document}
-	\fontsize{$fsize}{$((fsize+2))}\selectfont
+	\fontsize{$Fsize}{$((Fsize+2))}\selectfont
 	\begin{labels}
 	EOD
 }
@@ -525,8 +563,8 @@ pr_label() {
       local name="$Prefix $First $Last $Middle $Suffix"
       [[ $name == '    ' ]] && name="$Org"
       echo -e "\\C\n\\Red{$Last}$name\n$street"
-      city "$zip" "$city" "$state" "$country"
-      [[ $country == "$mycountry" ]] || echo "$country"
+      pr_city "$zip" "$city" "$state" "$country"
+      [[ $country == "$Mycountry" ]] || echo "$country"
       echo
    done
 }
@@ -537,7 +575,7 @@ description:	print preamble for booklet format
 DOC
 #-------------------------------------------------------------------------------
 pr_startbooklet() {
-   local name="${key:-$(basename "${input%.vcf}")}"
+   local name="${Key:-$(basename "${Input%.vcf}")}"
    cat <<-EOD
 	%%!lualatex
 	%%=== phone book ===
@@ -547,7 +585,7 @@ pr_startbooklet() {
 	\adjustspacing=2
 	\newfontfeature{Microtype}{protrusion=default;expansion=default}
 	\directlua{fonts.protrusions.setups.default.factor=.5}
-	\setmainfont{$font}[BoldFont=$bold]
+	\setmainfont{$Font}[BoldFont=$Bold]
 	\usepackage{polyglossia}\setmainlanguage{dutch}
 	\usepackage{ctable}
 	\usepackage{colortbl}
@@ -568,7 +606,7 @@ pr_startbooklet() {
 	\setlength{\extrarowheight}{1ex}
 	\def\G{\rowcolor[gray]{.8}}
 	\begin{document}%\renewcommand{\arraystretch}{.8}
-	\fontsize{$fsize}{$((fsize+2))}\selectfont
+	\fontsize{$Fsize}{$((Fsize+2))}\selectfont
 	\begin{longtable}{L{52}L{68}R{36}}
 	  \multicolumn{3}{@{}l@{}}{\Large\bfseries Adreslijst $name
 	  \hfill\today}\tabularnewline
@@ -629,7 +667,7 @@ pr_booklet() {
 description:	print preamble for FritzBox xml format
 DOC
 #-------------------------------------------------------------------------------
-pr_startxml () {
+pr_startxml() {
    cat <<-'EOD'
 	<?xml version="1.0" encoding="utf-8"?>
 	<phonebooks><phonebook name="Contacts">
@@ -641,16 +679,16 @@ pr_startxml () {
 description:	print in FritzBox xml format
 DOC
 #-------------------------------------------------------------------------------
-pr_xml () {
+pr_xml() {
    # need at least one telephone number:
    local p=() t=() n=0
-   [[ -n $Hphone ]] && { p+=("$Hphone"); t+=(private); ((n++)); }
-   [[ -n $Wphone ]] && { p+=("$Wphone"); t+=(business); ((n++)); }
-   [[ -n $Mphone ]] && { p+=("$Mphone"); t+=(mobile); ((n++)); }
-   if [[ $n -eq 0 ]]; then
+   [[ -n $Hphone ]] && { p+=("$Hphone"); t+=('private'); ((n++)); }
+   [[ -n $Wphone ]] && { p+=("$Wphone"); t+=('business'); ((n++)); }
+   [[ -n $Mphone ]] && { p+=("$Mphone"); t+=('mobile'); ((n++)); }
+   if (( n == 0 )); then
       return
    else
-   cat <<-EOD
+      cat <<-EOD
 	<contact>
 	  <category/>
 	  <person>
@@ -664,8 +702,8 @@ pr_xml () {
    fi
    echo "  </telephony>"
    p=() t=() n=0
-   [[ -n $Hmail ]] && { p+=("$Hmail"); t+=(private); ((n++)); }
-   [[ -n $Wmail ]] && { p+=("$Wmail"); t+=(business); ((n++)); }
+   [[ -n $Hmail ]] && { p+=("$Hmail"); t+=('private'); ((n++)); }
+   [[ -n $Wmail ]] && { p+=("$Wmail"); t+=('business'); ((n++)); }
    if [[ $n -gt 0 ]]; then
       echo "  <services nid=\"$n\">"
       for ((i=0;i<n;i++)); do
@@ -699,7 +737,7 @@ pr_vcard () {
    echo "N:$Last;$First;$Middle;$Prefix;$Suffix"
    [[ -n $Nick ]] && echo "NICKNAME:${Nick:1:-1}"
    [[ -n $Note ]] && echo "NOTE:$Note"
-   [[ -n $Org ]] && echo "ORG:$Org"
+   [[ -n $Org  ]] && echo "ORG:$Org"
    set -- HOME CELL WORK
    for i in "$Hphone" "$Mphone" "$Wphone"; do
       [[ -n $i ]] || continue
@@ -740,6 +778,7 @@ filltype() {
    done
 }
 
+# this works for dutch users only...
 AreaCodes=(
    6 10 13 15 20 23 24 26 30 33 35 36 38 40 43 45 46 50 53 55 58 70 71 72
    73 74 75 76 77 78 79 85 87 88 101 111 113 114 115 117 118 161 162 164
@@ -749,25 +788,25 @@ AreaCodes=(
    492 493 495 497 499 511 512 513 514 515 516 517 518 519 521 522 523 524
    525 527 528 529 541 543 544 545 546 547 548 561 562 566 570 571 572 573
    575 577 578 591 592 593 594 595 596 597 598 599 800 900 032 033 034 039
-   044 049 061 062 064 0599 01
+   044 049 061 062 064 0352 0385 0599 01
 )
 
 light # start with colors for a light background
 
 handle_options "$@"
-set -- "${args[@]}"
+set -- "${Args[@]}"
 
 searchkey="$1"
 shopt -s nocasematch
 
-input="$(eval "realpath '$input'")" # eval allows use of ~
-[[ -n $input ]] || die "environment var CONTACTS was empty and --input option not used"
-[[ -e $input ]] || die "input file $input not found"
+Input="$(eval "realpath '$Input'")" # eval allows use of ~
+[[ -n $Input ]] || die "environment var CONTACTS was empty and --input option not used"
+[[ -e $Input ]] || die "input file $Input not found"
 tmp="$(mktemp -dt "$Myname".XXXXXXXXXX)"
 
 cd "$tmp" || die "Could not cd to $tmp"
 
-case $format in
+case $Format in
 (labels)  pr_startlabels;;
 (booklet) pr_startbooklet;;
 (xml)     pr_startxml;;
@@ -778,14 +817,14 @@ esac
 # remove \r for unix line endings,
 # remove waid=[0-9]* (can occur in phone numbers)
 # join lines starting with space (=continuation lines) with previous line
-sed 'N;s/;waid=[0-9]\+//;s/\r//g;s/\n //g;P;D' "$input" |
+sed 'N;s/;waid=[0-9]\+//;s/\r//g;s/\n //g;P;D' "$Input" |
 # one file xnnnnn for each vcard:
 csplit --suppress-matched -ksz -fx -n5 - /BEGIN:VCARD/ '{*}'
 
 # read each file containing the search key:
 find . -type f |
 LC_COLLATE=en_US.utf8 sort |
-xargs grep $grepopt "$searchkey" |
+xargs grep $Grepopt "$searchkey" |
 while read -r file; do
    unset Aim Bday Disp First Hcity Hcountry Hmail Hphone Hstate \
          Hstreet Hzip Last Middle Mphone Nick Note Org Prefix Suffix Url Wcity \
@@ -908,8 +947,8 @@ while read -r file; do
 
    # If a key was specified, print only if the record has that key.
    # No key specified, just print.
-   [[ -n $key ]] && [[ ! $Aim == "$key" ]] && continue
-   case $format in
+   [[ -n $Key ]] && [[ ! $Aim == "$Key" ]] && continue
+   case $Format in
    (labels)  pr_label;;
    (booklet) pr_booklet;;
    (xml)     pr_xml;;
@@ -918,7 +957,7 @@ while read -r file; do
    (vcard)   pr_vcard;;
    esac
 done
-case $format in
+case $Format in
 (labels)  echo '\end{labels}\end{document}';;
 (term)    ;;
 (sorter)  ;;
