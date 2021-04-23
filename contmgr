@@ -38,9 +38,9 @@ contmgr [options] [searchkey]
 == Format specific options (b, l and t specify relevant formats):
 
 -d|--dark	(t)  do not use color in terminal output
--f|--font	(bl) set font and optionally bold font or pointsize:
-		     --font=MetaBook-Roman,MetaBold-Roman 14
-		     default: DejaVuSerif 12
+-f|--font	(bl) set font and optionally bold font or pointsize.
+		     Default:
+		     --font='DejaVuSerif,DejaVuSerif-Bold 12'
 -N|--nocolor	(t)  set colors for dark background
 -n|--noarea=ARG	(bl) in phone numbers, remove area codes with the
 		     value |ARG|, possibly prefixed with 0 (zero)
@@ -146,7 +146,8 @@ helpall() { sed -n "/^:<<'DOC'$/,/^DOC/p" "$0"|sed '1d;$d'|
 synopsis:	 handle_options "$@"
 description:	handle the options.
 globals used:	 Myname Version AreaCodes
-globals  set:	 Args Noarea Grepopt Format Return Fsize Font Input Mycountry Key
+globals  set:	 Args Noarea Grepopt Format Return Fsize Font Bold Input
+		 Mycountry Key
 returns:	the number of remaining arguments
 DOC
 #-------------------------------------------------------------------------------
@@ -161,7 +162,7 @@ handle_options() {
    eval set -- "$options"
    
    Key='' Noarea='' Grepopt=-ril Format='term' Return=''
-   Fsize=12 Font='DejaVuSerif' Input="$HOME/Contacts.vcf"
+   Fsize=12 Font='DejaVuSerif' Bold='DejaVuSerif-Bold' Input="$HOME/Contacts.vcf"
 
    Mycountry='Nederland' # this is emptied except in vcard format
    # shellcheck disable=SC2153
@@ -171,7 +172,7 @@ handle_options() {
          source "$PREFIX/contmgr.conf"
       fi
    else
-      Warn "Env var PREFIX is undefined; look for ~/.contmgr.conf only"
+      Warn "Env var PREFIX is undefined; looking for ~/.contmgr.conf only"
    fi
    # shellcheck disable=SC1090
    [[ -e $HOME/.contmgr.conf ]] && source "$HOME/.contmgr.conf"
@@ -242,16 +243,24 @@ handle_options() {
 			dark
 			shift
 			;;
-      (-f|--font)       # (bl) set font and optionally bold font or pointsize:
-			#      --font=MetaBook-Roman,MetaBold-Roman 14
-			#      default: DejaVuSerif 12
-			if [[ $2 =~ ([A-Za-z_\ -]+)(,[A-Za-z_\ -]+)?( [0-9]+)?$ ]]; then
-			   Font=${BASH_REMATCH[1]}
-			   Bold=${BASH_REMATCH[2]#,}
-			   Fsize=${BASH_REMATCH[3]% }
+      (-f|--font)       # (bl) set font and optionally bold font or pointsize.
+			#      Default:
+			#       --font='DejaVuSerif,DejaVuSerif-Bold 12'
+			#      Argument examples:
+			#	'a,b 12' 'a,b' 'a' 'a 12' 'a, 12' ',b' ',b 12' '12'
+			#      The last one (|'12'|) changes the pointsize only.
+			if [[ $2 =~ ([[:alnum:]_-]*)(,[[:alnum:]_-]*)?( [0-9]+)?$ ]]; then
+			   f=${BASH_REMATCH[1]}
+			   b=${BASH_REMATCH[2]#,}
+			   s=${BASH_REMATCH[3]# }
+			  if [[ $f =~ ^[[:digit:]]+ ]]; then
+			     Fsize="$f"
+			  else
+			     [[ -n $f ]] && Font="$f"
+			     [[ -n $b ]] && Bold="$b"
+			     [[ -n $s ]] && Fsize="$s"
+			  fi
 			fi
-			: "${Fsize:=12}"
-			: "${Bold:=$Font}"
 			shift 2
 			;;
       (-N|--nocolor)    # (t)  set colors for dark background
@@ -635,7 +644,7 @@ pr_booklet() {
       [[ -n $street ]] || continue
       adr="$(join "\\\\" \
           "$street" \
-          "$(city "$zip" "$city" "$state" "$country")" \
+          "$(pr_city "$zip" "$city" "$state" "$country")" \
           "${country%$mycountry}" \
       )"
       shopt -u nocasematch
