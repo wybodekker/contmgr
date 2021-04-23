@@ -414,7 +414,7 @@ description:	insert spaces in phone number; argument is name of the number
 DOC
 #-------------------------------------------------------------------------------
 fix() {
-   local area i n p
+   local area i n p v
    eval "p=\$$1"
    case $p in
    ('') eval "$1=''"
@@ -432,7 +432,8 @@ fix() {
 		     ;;
               (8|10) v="${n:0:4} ${n:4:4} ${n:8:2}"
 		     ;;
-
+              (11)   v="${n:0:4} ${n:4:3} ${n:7:4}"
+		     ;;
               (*)    Warn "Invalid phone number: $area$n"
                      v="$n"
 		     ;;
@@ -512,19 +513,20 @@ DOC
 pr_term() {
    hc=$(pr_city "$Hzip" "$Hcity" "$Hstate" "$Hcountry")
    wc=$(pr_city "$Wzip" "$Wcity" "$Wstate" "$Wcountry")
-   echo -e "$Nor================================================================================"
-   printf "$Yel%-40s%-11s%-6s%27s$Nor\n" "$Disp" "$Bday" "$(pr_age)" "$Aim"
-   [[ -n "$Hstreet$Wstreet" ]] && printf "%-40s%s\n" "$Hstreet" "$Wstreet"
-   [[ -n "$hc$wc" ]] && printf "%-40s%s\n" "$hc" "$wc"
+   echo -e "$Nor———————————————————————————————————————————————————————————"
+   printf "$Yel%-44s%-10s %-5s %s$Nor\n" "$Disp" "$Bday" "$(pr_age)" "$Aim"
+   [[ -n "$Hstreet$Wstreet" ]] && printf "%-30s%-30s\n" "$Hstreet" "$Wstreet"
+   [[ -n "$hc$wc" ]] && printf "%-30s%-30s\n" "$hc" "$wc"
    h="${Hcountry%$Mycountry}"
    w="${Wcountry%$Mycountry}"
-   [[ -n "$h$w" ]] && printf "%-40s%s\n" "$Hcountry" "$Wcountry"
+   [[ -n "$h$w" ]] && printf "%-30s%-30s\n" "$Hcountry" "$Wcountry"
    fix Hphone
    fix Mphone
    fix Wphone
-   [[ -n "$Hphone$Mphone$Wphone" ]] && printf '%-20s%-20s%s\n' "$Hphone" "$Mphone" "$Wphone"
-   [[ -n "$Hmail$Wmail" ]] && printf "$Blu%-40s%s\n" "$Hmail" "$Wmail"
-   [[ -n $Note ]] && echo -e "${Note%'\n'}"
+   [[ -n "$Hphone$Mphone$Wphone" ]] &&
+      printf "%-20s$Mag%-20s$Nor%-20s\n" "$Hphone" "$Mphone" "$Wphone"
+   [[ -n "$Hmail$Wmail" ]] && printf "$Blu%-27s%27s\n" "$Hmail" "$Wmail"
+   [[ -n $Note ]] && echo -e "${Note%'\n'}" |fmt -60
 }
 
 :<<'DOC' #---------------------------------------------------------------------
@@ -665,7 +667,7 @@ pr_booklet() {
       adr="$(join "\\\\" \
           "$street" \
           "$(pr_city "$zip" "$city" "$state" "$country")" \
-          "${country%$mycountry}" \
+          "${country%$Mycountry}" \
       )"
       shopt -u nocasematch
       adr=${adr//\\n/\\\\}
@@ -748,14 +750,14 @@ pr_xml() {
 description:	print vcard
 DOC
 #-------------------------------------------------------------------------------
-pr_vcard () {
+pr_vcard() {
    local h w i
    echo -e "BEGIN:VCARD\nVERSION:3.0"
    h="ADR;TYPE=HOME:;;$Hstreet;$Hcity;$Hstate;${Hzip// /};$Hcountry"
    w="ADR;TYPE=WORK:;;$Wstreet;$Wcity;$Wstate;${Wzip// /};$Wcountry"
    for i in "$h" "$w"; do
       if [[ ! $i =~ \;\;\;\;\;\;$ ]]; then
-         [[ $i =~ \;$ ]] && i+="$mycountry"
+         [[ $i =~ \;$ ]] && i+="$Mycountry"
          echo "$i"
       fi
    done
@@ -802,8 +804,9 @@ description:	set type to the first argument for which the corresponding
 DOC
 #-------------------------------------------------------------------------------
 filltype() {
-   until [[ $# -eq 0 ]] || [[ -n $type  ]]; do
-      eval "test -z \$$1 && type=${1:1}; shift"
+   local tpe=''
+   until [[ $# -eq 0 ]] || [[ -n $tpe  ]]; do
+      eval "test -z \$$1 && tpe=${1:1}; shift"
    done
 }
 
