@@ -96,7 +96,7 @@ file, either in system file: |$PREFIX/contmgr.conf| or in a user file:
 |$HOME/.contmgr.conf|. These files are read in this order and they can
 contain input such as this:
 
-   Fsize=11
+   Fsize=12
    Font='DejaVuSerif'
    Bold='DejaVuSerif-Bold'
    Input="$HOME/Contacts.vcf"
@@ -156,7 +156,7 @@ handle_options() {
    options=$(getopt \
       -n "$Myname" \
       -o bdf:HhIi:k:lNn:r:stvVwx \
-      -l booklet,dark,font:,Help,help,input:,key:,labels,noarea:,nocolor,return:,sorter,term,vcard,version,word,xml \
+      -l booklet,dark,dot,font:,Help,help,input:,key:,labels,noarea:,nocolor,return:,sorter,term,vcard,version,word,xml \
       -- "$@"
    ) || exit 1
    eval set -- "$options"
@@ -164,6 +164,7 @@ handle_options() {
    Key='' Noarea='' Grepopt=-ril Format='term' Return=''
    Fsize=12 Font='DejaVuSerif' Bold='DejaVuSerif-Bold' Input="$HOME/Contacts.vcf"
 
+   Dot=''
    Mycountry='Nederland' # this is emptied except in vcard format
    # shellcheck disable=SC2153
    if [[ -n $PREFIX ]]; then
@@ -203,7 +204,7 @@ handle_options() {
 			shift 2
 			;;
       (-k|--key=ARG)    # selection key; selects records containing
-			# |ARG| in the AIM field
+			# |ARG| in the X-AIM field
 			Key="$2"
 			shift 2
 			;;
@@ -243,7 +244,7 @@ handle_options() {
 			dark
 			shift
 			;;
-      (-f|--font)       # (bl) set font and optionally bold font or pointsize.
+      (-f|--font)       # (bl) set font and/or bold font and/or pointsize.
 			#      Default:
 			#       --font='DejaVuSerif,DejaVuSerif-Bold 12'
 			#      Argument examples:
@@ -278,6 +279,11 @@ handle_options() {
 			#      replaced with bullets
 			Return="${2//,/\\bul }"
 			shift 2
+			;;
+      (   --dot)        # suffix label lines with a dot blind people
+			# text-to-voice progs will pause there
+			Dot=.
+			shift
 			;;
       (-I)	        instscript "$0" ||
 			   die 'the -I option is for developers only'
@@ -386,15 +392,15 @@ pr_city() {
    [[ -z $2 ]] && return # no city = no address
    case "$1" in
    ([0-9][0-9][0-9][0-9][A-Z][A-Z]) # Netherlands
-         echo "${1:0:4} ${1:4:2} $2"
+         echo "${1:0:4} ${1:4:2} $2$Dot"
 	 ;;
    ([A-Z][A-Z][0-9][0-9][A-Z][A-Z]) # UK
-         echo -e "$2\n${1:0:3} ${1:3:3}"
+         echo -e "$2\n${1:0:3} ${1:3:3}$Dot"
 	 ;;
    ([A-Z][A-Z][0-9][0-9][0-9][0-9][0-9]) # USA
-         echo "$2 ${1:0:2} ${1:2:5}"
+         echo "$2 ${1:0:2} ${1:2:5}$Dot"
 	 ;;
-   (*)   echo "$2 $3$1"
+   (*)   echo "$2 $3$1$Dot"
 	 ;;
    esac
 }
@@ -548,11 +554,24 @@ pr_startlabels() { local awa=''
 	  \end{minipage}\\\\[-3ex]
 	}
 	\def\C{$awa}
-	\def\Red#1{}
 	\begin{document}
 	\fontsize{$Fsize}{$((Fsize+2))}\selectfont
 	\begin{labels}
 	EOD
+}
+
+:<<'DOC' #---------------------------------------------------------------------
+= trim
+descrtiption:	trim and squeeze named variable
+DOC
+#-------------------------------------------------------------------------------
+trim() {
+  local x
+  shopt -s extglob
+  eval "x=\${$1%%+([[:space:]])}"
+  x="${x##+([[:space:]])}"
+  eval "$1=\${x//+([[:space:]])/ }"
+  shopt -u extglob
 }
 
 :<<'DOC' #---------------------------------------------------------------------
@@ -561,7 +580,7 @@ description:	print in home and work addresses label format
 DOC
 #-------------------------------------------------------------------------------
 pr_label() {
-   local i j street zip city state country
+   local i j street zip city state country name
    for i in H W; do
       for j in street zip city state country; do
          eval $j="\$$i$j"
@@ -569,11 +588,12 @@ pr_label() {
       [[ -n $street ]] || continue
       street=${street//#/\\#}
       street=${street//_/\\_}
-      local name="$Prefix $First $Last $Middle $Suffix"
-      [[ $name == '    ' ]] && name="$Org"
-      echo -e "\\C\n\\Red{$Last}$name\n$street"
-      pr_city "$zip" "$city" "$state" "$country"
-      [[ $country == "$Mycountry" ]] || echo "$country"
+      name="$Prefix $First $Last $Middle $Suffix"
+      trim name
+      [[ -z $name ]] && name="$Org"
+      echo -e "\\C\n$name$Dot\n${street//\\n/$Dot\\n}$Dot"
+      pr_city "$zip" "$city" "$state" "$country" "$Dot"
+      [[ $country == "$Mycountry" ]] || echo "$country$Dot"
       echo
    done
 }
