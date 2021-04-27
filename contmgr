@@ -828,6 +828,8 @@ light # start with colors for a light background
 handle_options "$@"
 set -- "${Args[@]}"
 
+command -v msort  >/dev/null || die "Please install msort"
+
 searchkey="$1"
 shopt -s nocasematch
 
@@ -846,24 +848,27 @@ case $Format in
 (term)    ;;
 esac
 
+# initial expressions for mobile numbers
+Mob=(316 3247 3248[4-9] 3249[1-9] 33[67] 393[234] 447[45789] 491[567] 599[479][56] )
+# remove empty lines
+# insert empty line after END:VCARD as a record separator for msort.
 # remove \r for unix line endings,
-# remove waid=[0-9]* (can occur in phone numbers)
-# join lines starting with space (=continuation lines) with previous line
-sed 'N;s/;waid=[0-9]\+//;s/\r//g;s/\n //g;P;D' "$Input" |
+# remove empty N: fields, so that msort uses the ORG: field
+sed '/^$/d;s/^END:VCARD/&\n/;s/\r//g;/N:;;;;/d' "$Input" |
+# sort by N and/or ORG:
+msort -qjb -tN: -C -o= -tORG: -C -o= |
 # one file xnnnnn for each vcard:
 csplit --suppress-matched -ksz -fx -n5 - /BEGIN:VCARD/ '{*}'
 
 # read each file containing the search key:
-find . -type f |
-LC_COLLATE=en_US.utf8 sort |
-xargs grep $Grepopt "$searchkey" |
+find . -type f -name 'x*' -print0 |
+xargs --null grep $Grepopt "$searchkey" |
+sort |
 while read -r file; do
    unset Aim Bday Disp First Hcity Hcountry Hmail Hphone Hstate \
          Hstreet Hzip Last Middle Mphone Nick Note Org Prefix Suffix Url Wcity \
          Wcountry Wmail Wphone Wstate Wstreet Wzip \
          ahome awork phome pcell pwork ehome ework
-   # initial expressions for mobile numbers
-   mob=(316 3247 3248[4-9] 3249[1-9] 33[67] 393[234] 447[45789] 491[567] 599[479][56] )
    while IFS= read -r line; do
       declare -l type
       [[ $line =~ ^item[0-9]\. ]] && line="${line/${BASH_REMATCH[0]}/}"
@@ -890,6 +895,9 @@ while read -r file; do
       elif [[ $line =~ ^NICKNAME:(.*) ]]; then
          # shellcheck disable=SC1111
          Nick="“${BASH_REMATCH[1]}”"
+      elif [[ $line =~ ^END:VCARD ]]; then
+         Disp=$(displayname)
+         break
       elif [[ $line =~ ^ORG:(.*) ]]; then
          Org=${BASH_REMATCH[1]%;}
       elif [[ $line =~ ^URL*:(.*) ]]; then
@@ -910,7 +918,7 @@ while read -r file; do
                    ;;
               ('') Warn 'Have home and work email addresses, skipping others'
                    ;;
-               (*) Warn "Skipping email address $m unrecognized type"
+               (*) Warn "Skipping email address $m: unrecognized type"
             esac
          else
             Warn "incorrect email address: '$m'"
@@ -949,7 +957,7 @@ while read -r file; do
             Warn "$(displayname): phone number $v has wrong format"
          fi
          v=${v//[-() ]/}
-         for e in "${mob[@]}"; do
+         for e in "${Mob[@]}"; do
             [[ $v =~ ^\+$e ]] && type='cell'
          done
          filltype phome pcell pwork
@@ -972,8 +980,6 @@ while read -r file; do
          esac
       elif [[ $line =~ ^NOTE:(.*) ]]; then
          Note=${BASH_REMATCH[1]}
-      elif [[ $line =~ ^END:VCARD ]]; then
-         Disp=$(displayname)
       fi
    done < "$file"
 
