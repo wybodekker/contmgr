@@ -663,34 +663,37 @@ pr_booklet() {
       for j in street zip city state country; do
          eval $j="\$$i$j"
       done
-      [[ -n $street ]] || continue
-      adr="$(join "\\\\" \
-          "$street" \
-          "$(pr_city "$zip" "$city" "$state" "$country")" \
-          "${country%$Mycountry}" \
-      )"
-      shopt -u nocasematch
-      adr=${adr//\\n/\\\\}
-      shopt -s nocasematch
-      texescape adr
-      fix Hphone
-      fix Mphone
-      fix Wphone
-      Hmail=${Hmail//_/\\_}
-      Wmail=${Wmail//_/\\_}
-      echo -n "$g\Red{$name} $First"
-      [[ -n $Middle ]] && echo -n " $Middle"
-      [[ -n $Nick ]] && echo -n " $Nick"
-      [[ -n $Org ]] && [[ ! $name == "$Org" ]] && echo -n " ($Org)"
-      if [[ -n $Note ]]; then
-         local x=()
-         texescape Note
-         IFS=$'|' read -ra x <<<"${Note//'\n'/|}"
-         printf '\\\\\Blu{%s}' "${x[@]}"
+      if [[ -n $street ]]; then
+         adr+="$(join "\n" \
+             "$street" \
+             "$(pr_city "$zip" "$city" "$state" "$country")" \
+             "${country%$Mycountry}" "|"
+         )"
       fi
-      echo -n "&$adr&"
-      echo "\\EM{$(join "}\\\\\\EM{" "$Hphone" "$Mphone" "$Wphone" "$Hmail" "$Wmail")}\\NN"
    done
+   shopt -u nocasematch
+   adr=${adr%\\n|}
+   adr=${adr/|/[2ex]} # space between home and work address
+   adr=${adr//\\n/\\\\}
+   shopt -s nocasematch
+   texescape adr
+   fix Hphone
+   fix Mphone
+   fix Wphone
+   Hmail=${Hmail//_/\\_}
+   Wmail=${Wmail//_/\\_}
+   echo -n "$g\Red{$name} $First"
+   [[ -n $Middle ]] && echo -n " $Middle"
+   [[ -n $Nick ]] && echo -n " $Nick"
+   [[ -n $Org ]] && [[ ! $name == "$Org" ]] && echo -n " ($Org)"
+   if [[ -n $Note ]]; then
+      local x=()
+      texescape Note
+      IFS=$'|' read -ra x <<<"${Note//'\n'/|}"
+      printf '\\\\\Blu{%s}' "${x[@]}"
+   fi
+   echo -n "&$adr&"
+   echo "\\EM{$(join "}\\\\\\EM{" "$Hphone" "$Mphone" "$Wphone" "$Hmail" "$Wmail")}\\NN"
 }
 
 :<<'DOC' #---------------------------------------------------------------------
