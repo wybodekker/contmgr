@@ -1,7 +1,7 @@
 #!/bin/bash
 
 Myname="${0##*/}"
-Version=2.02
+Version=2.03
 
 # To do:
 # Option running  ~/Contacts/sortcont ?
@@ -774,8 +774,8 @@ description:	print vcard
 DOC
 #-------------------------------------------------------------------------------
 pr_vcard() {
-   local h w i hmw type
-   declare -A type=([H]=HOME [M]=CELL [W]=WORK)
+   local h w i hmw typarr
+   declare -A typarr=([H]=HOME [M]=CELL [W]=WORK)
    echo -e "BEGIN:VCARD\nVERSION:3.0"
    h="ADR;TYPE=HOME:;;$Hstreet;$Hcity;$Hstate;${Hzip// /};$Hcountry"
    w="ADR;TYPE=WORK:;;$Wstreet;$Wcity;$Wstate;${Wzip// /};$Wcountry"
@@ -797,14 +797,7 @@ pr_vcard() {
    for hmw in H M W; do
       eval "i=\$${hmw}phone"
       [[ -n $i ]] || continue # i becomes Hphone, Mphone, Wphone
-      case $i in
-        (0[89]00*) ;;
-             (00*) i=+${i#00};;
-              (0*) i=+$Mycode${i#0};;
-              (+*) ;;
-               (*) Warn "wrong phone number $i"
-      esac
-      tel="TEL;TYPE=${type[$hmw]}:$i"
+      tel="TEL;TYPE=${typarr[$hmw]}:$i"
       [[ $tel =~ \:$ ]] || echo "$tel"
       shift
    done
@@ -815,23 +808,24 @@ pr_vcard() {
 
 :<<'DOC' #---------------------------------------------------------------------
 = filltype
-description:	set type to the first argument for which the corresponding
-		variable is empty
+synopsis	 filltype xhome xwork [xcell]
+description:	Set Type to the first argument for which the corresponding
+		variable is empty; the name of the argument tells the type
+		assigned.
 		note:
-		made this, because thunderbird exports home address without
+		Made this, because thunderbird exports home address without
 		type=HOME if it's the first address, and the work address
 		without type=WORK if it's the second address. iCloud exports
 		with both type indications.
 		thus, in the absence of type indicators
 		the first two addresses are home and work
 		the first two emails are home and work
-		the first three phonenrs are home, cell and work
+		the first three phonenrs are home, work. and celll
 DOC
 #-------------------------------------------------------------------------------
 filltype() {
-   local tpe=''
-   until [[ $# -eq 0 ]] || [[ -n $tpe  ]]; do
-      eval "test -z \$$1 && tpe=${1:1}; shift"
+   until [[ $# -eq 0 ]] || [[ -n $Type  ]]; do
+      eval "test -z \$$1 && Type=${1:1}; shift"
    done
 }
 
@@ -847,6 +841,43 @@ AreaCodes=(
    575 577 578 591 592 593 594 595 596 597 598 599 800 900 032 033 034 039
    044 049 061 062 064 0352 0385 0599 01
 )
+
+:<<'DOC' #---------------------------------------------------------------------
+= mobtest
+synopsis:	mobtest Xphone type boolean
+description:	Test if the content of the named variable in arg 1 is probably a 
+		mobile number. If so, and arg 3 is false, of if not and arg 3 is
+		true, issue a warning.
+		Finally, edit the content of arg 1 by replacing an initial 
+		|+$Mycode| with 0 for nicer display (unless the output format is 
+		|vcard|.
+DOC
+#-------------------------------------------------------------------------------
+mobtest() {
+   local n
+   eval "n=\$$1"
+   [[ -z $n ]] && return
+   cell=false
+   for i in 316 3247 3248[4-9] 3249[1-9] 33[67] 393[234] 447[45789] \
+            491[567] 599[479][56]
+   do
+      if [[ $n =~ $i ]]; then
+         cell=true
+         break
+      fi
+   done
+   if [[ $cell != "$3" ]]; then
+      if $cell; then 
+         Warn "$2 phone $n looks like a mobile number"
+      else
+         Warn "$2 phone $n does not look like a mobile number"
+      fi
+   fi
+   if [[ $Format != vcard ]]; then
+      n=${n/+$Mycode/0}
+      eval "$1=\$n"
+   fi
+}
 
 light # start with colors for a light background
 
@@ -873,11 +904,21 @@ case $Format in
 (term)    ;;
 esac
 
-# remove empty lines
-# insert empty line after END:VCARD as a record separator for msort.
-# remove \r for unix line endings,
-# remove empty N: fields, so that msort uses the ORG: field
-sed '/^$/d;s/^END:VCARD/&\n/;s/\r//g;/N:;;;;/d' "$Input" |
+sed '
+/^ITEM[0-9]\..*/Is/ITEM[0-9]\.//I	# remove ITEMs
+s/\\,/,/g		# unescape commas
+/^$/d			# remove empty lines
+s/^END:VCARD/&\n/I	# insert empty line after END:VCARD as a record separator for msort.
+s/\r//g			# remove \r for unix line endings
+/N:;;;;/Id		# remove empty N: fields, so that msort uses the ORG: field
+s/;TYPE=\(PREF\|VOICE\|INTERNET\)//gI	# Remove unused types
+s/;TYPE=IPHONE/;TYPE=CELL/gI		# IPHONE is a CELL phone
+/^\(REV\|PRODID\|UID\|VERSION\|FN\|IMPP\):/Id		# remove unused entries
+/TEL[:;]/Is/[() ~ -]//g			# + and digits only
+/TEL[;:]/Is/:00/:+/			# 00 → +
+/TEL[;:]/Is/:0/:+'"$Mycode"'/		# 0 → +31
+/TYPE=\(FAX\|PAGER\)/Id			# remove FAX etc. entries
+' "$Input" |
 # sort by N and/or ORG:
 msort -qjb -tN: -C -o= -tORG: -C -o= |
 # one file xnnnnn for each vcard:
@@ -894,22 +935,11 @@ while read -r file; do
          ahome awork phome pcell pwork ehome ework
 	 Harea='' Warea=''
    while IFS= read -r line; do
-      declare -l type
-      [[ $line =~ ^item[0-9]\. ]] && line="${line/${BASH_REMATCH[0]}/}"
-      [[ $line =~ ^(version|fn|prodid|rev|impp) ]] && continue
-      line=${line//\\,/,}
-      # skip type=Fax lines
-      [[ $line =~ type=Fax ]] && continue
-      # only recognize type Home, Work and Cell
-      if [[ $line =~ type=(Home|Work|Cell) ]]; then
-         type=${BASH_REMATCH[1]}
-      else
-         type=''
+      Type=''
+      if [[ $line =~ TYPE=([[:alpha:]]*) ]]; then
+         Type="${BASH_REMATCH[1]}"
+         line=${line/;TYPE=$Type/}
       fi
-      # remove other type, like Pref, Pager...
-      while [[ $line =~ \;type=([a-z]+) ]]; do
-         line=${line//${BASH_REMATCH[0]}/}
-      done
       if [[ $line =~ ^N:(.*)\;(.*)\;(.*)\;(.*)\;(.*) ]]; then
          Last=${BASH_REMATCH[1]}
          First=${BASH_REMATCH[2]}
@@ -931,26 +961,24 @@ while read -r file; do
       elif [[ $line =~ ^EMAIL:(.*) ]]; then
          m="${BASH_REMATCH[1]}"
          if [[ $m =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$ ]]; then
-            filltype ehome ework
+            [[ -z $Type ]] && filltype ehome ework
             # shellcheck disable=SC2034
-            case $type in
+            case $Type in
             (home) ehome=1
                    setvar Hmail "$m" 'home email'
                    ;;
             (work) ework=1
                    setvar Wmail "$m" 'work email'
                    ;;
-              ('') Warn 'Have home and work email addresses, skipping others'
-                   ;;
-               (*) Warn "Skipping email address $m: unrecognized type"
+               (*) Warn "Skipping email address $m: unrecognized type ($Type)"
             esac
          else
             Warn "incorrect email address: '$m'"
          fi
-      elif [[ $line =~ ^ADR:\;(.*)\;(.*)\;(.*)\;(.*)\;(.*)\;(.*)$ ]]; then
+      elif [[ $line =~ ^ADR:(.*)\;(.*)\;(.*)\;(.*)\;(.*)\;(.*)$ ]]; then
          filltype ahome awork
          # shellcheck disable=SC2034
-         case $type in
+         case $Type in
          (home)
              ahome=1
              Hstreet="${BASH_REMATCH[2]}"
@@ -969,9 +997,9 @@ while read -r file; do
              Wzip="${Wzip// /}"
              Wcountry="${BASH_REMATCH[6]/Netherlands/Nederland}"
              ;;
-        ('') Warn 'Have home and work addresses, skipping others'
+        ('') Warn "Already have home and work addresses, skipping $line"
              ;;
-         (*) Warn "Skipping address $line of unrecognized type"
+         (*) Warn "Skipping address $line of unrecognized type ($Type)"
          esac
       elif [[ $line =~ ^X-CCODE-HOME:(.*) ]]; then
          Harea=${BASH_REMATCH[1]}
@@ -985,24 +1013,21 @@ while read -r file; do
             Warn "$(displayname): phone number $v has wrong format"
          fi
          # v is now 11n or 114 or +nnnnn...
-         filltype phome pcell pwork
-         # remove the + from phone numbers: 
-         v=${v/+$Mycode/0} # own country: replace +countrycode with 0
-         v=${v/+/00} # foreign country: replace + with 00
+         filltype phome pwork pcell
          # shellcheck disable=SC2034
-         case $type in
+         case $Type in
          (home) phome=1 # remember that home phone was set
                 setvar Hphone "$v" 'home phone'
-                ;;
-         (cell) pcell=1 # remember that cell phone was set
-                setvar Mphone "$v" 'cell phone'
                 ;;
          (work) pwork=1 # remember that work phone was set
                 setvar Wphone "$v" 'work phone'
                 ;;
-           ('') Warn 'Have home, mobile and work phone numbers, skipping others'
+         (cell) pcell=1 # remember that cell phone was set
+                setvar Mphone "$v" 'cell phone'
                 ;;
-            (*) Warn "Skipping phone number ($v) of unrecognized type"
+           ('') Warn "Already have home, mobile and work phone numbers, skipping $v"
+                ;;
+            (*) Warn "Skipping phone number ($v) of unrecognized type ($Type)"
          esac
       elif [[ $line =~ ^NOTE:(.*) ]]; then
          Note=${BASH_REMATCH[1]}
@@ -1012,6 +1037,13 @@ while read -r file; do
    # If a key was specified, print only if the record has that key.
    # No key specified, just print.
    [[ -n $Key ]] && [[ ! $Aim == "$Key" ]] && continue
+
+   # Check if phone numbers are cell/not cell as expected
+   # and replace initial +$Mycode with 0:
+   mobtest "Hphone" home false
+   mobtest "Wphone" work false
+   mobtest "Mphone" mobile true
+
    case $Format in
    (labels)  pr_label;;
    (booklet) pr_booklet;;
