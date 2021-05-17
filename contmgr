@@ -23,7 +23,7 @@ contmgr [options] [searchkey]
 		if ARG has no path info, the file is suppposed to reside
 		in the same directory as the default input file.
 -k|--key=ARG	selection key; selects records containing
-		|ARG| in the AIM field
+		|ARG| in the X-AIM field
 -w|--word	search key must be a complete word
 
 == Format options:
@@ -31,21 +31,27 @@ contmgr [options] [searchkey]
 -b|--booklet	print booklet
 -l|--labels	print address labels
 -s|--sorter	print only first line of |--term| format
+-T|--tagged	print tag / value list
 -t|--term	print to terminal
 -v|--vcard	print vcards
 -x|--xml	print xml for FritzBox
 
-== Format specific options (b, l and t specify relevant formats):
+== Format specific options (b, l, t and T specify relevant formats):
 
 -d|--dark	(t)  do not use color in terminal output
--f|--font	(bl) set font and optionally bold font or pointsize.
+-f|--font	(bl) set font and/or bold font and/or pointsize.
 		     Default:
-		     --font='DejaVuSerif,DejaVuSerif-Bold 12'
+		      --font='DejaVuSerif,DejaVuSerif-Bold 12'
+		     Argument examples:
+		      'a,b 12' 'a,b' 'a' 'a 12' 'a, 12' ',b' ',b 12' '12'
+		     The last one (|'12'|) changes the pointsize only.
 -N|--nocolor	(t)  set colors for dark background
 -n|--noarea=ARG	(bl) in phone numbers, remove area codes with the
 		     value |ARG|, possibly prefixed with 0 (zero)
 -r|--return=ARG	(l)  use |ARG| as returnaddres in labels, commas are 
 		     replaced with bullets
+   --dot	(lT) suffix label lines with a dot for visually
+		     handicapped, text-to-voice progs will pause there
 
 = Description
 contmgr lists your contacts to standard output. If you provide a search
@@ -73,11 +79,15 @@ Url	 v-t-- URL
 Bday	 v-t-- BDAY
 Hmail	 vxt-- EMAIL;TYPE=HOME
 Wmail	 vxt-- EMAIL;TYPE=WORK
+Hpobox	 v-tbl ADR;TYPE=HOME 1
+Hext	 v-tbl ADR;TYPE=HOME 2
 Hstreet	 v-tbl ADR;TYPE=HOME 3
 Hcity	 v-tbl ADR;TYPE=HOME 4
 Hstate	 v-tbl ADR;TYPE=HOME 5
 Hzip	 v-tbl ADR;TYPE=HOME 6
 Hcntry	 v-tbl ADR;TYPE=HOME 7
+Wpobox	 v-tbl ADR;TYPE=WORK 1
+Wext	 v-tbl ADR;TYPE=WORK 2
 Wstreet	 v-t-- ADR;TYPE=WORK 3
 Wcity	 v-t-- ADR;TYPE=WORK 4
 Wstate	 v-t-- ADR;TYPE=WORK 5
@@ -156,8 +166,8 @@ handle_options() {
    local options
    options=$(getopt \
       -n "$Myname" \
-      -o bdf:HhIi:k:lNn:r:stvVwx \
-      -l booklet,dark,dot,font:,Help,help,input:,key:,labels,noarea:,nocolor,return:,sorter,term,vcard,version,word,xml \
+      -o bdf:HhIi:k:lNn:r:sTtvVwx \
+      -l booklet,dark,dot,font:,Help,help,input:,key:,labels,noarea:,nocolor,return:,sorter,tagged,term,vcard,version,word,xml \
       -- "$@"
    ) || exit 1
    eval set -- "$options"
@@ -170,13 +180,13 @@ handle_options() {
    # shellcheck disable=SC2153
    if [[ -n $PREFIX ]]; then
       if [[ -e $PREFIX/contmgr.conf ]]; then
-         # shellcheck disable=SC1090
+         # shellcheck disable=SC1091
          source "$PREFIX/contmgr.conf"
       fi
    else
       Warn "Env var PREFIX is undefined; looking for ~/.contmgr.conf only"
    fi
-   # shellcheck disable=SC1090
+   # shellcheck disable=SC1091
    [[ -e $HOME/.contmgr.conf ]] && source "$HOME/.contmgr.conf"
    [[ -n $Mycode ]] || Warn "You did not set Mycode in any configuration file"
    
@@ -228,6 +238,10 @@ handle_options() {
 			Format=sorter
 			shift
 			;;
+      (-T|--tagged)     # print tag / value list
+			Format=tagged
+			shift
+			;;
       (-t|--term)       # print to terminal
 			Format=term
 			shift
@@ -240,7 +254,7 @@ handle_options() {
 			Format=xml
 			shift
 			;;
-# Format specific options (b, l and t specify relevant formats):
+# Format specific options (b, l, t and T specify relevant formats):
 
       (-d|--dark)       # (t)  do not use color in terminal output
 			dark
@@ -282,8 +296,8 @@ handle_options() {
 			Return="${2//,/\\bul }"
 			shift 2
 			;;
-      (   --dot)        # suffix label lines with a dot blind people
-			# text-to-voice progs will pause there
+      (   --dot)        # (lT) suffix label lines with a dot for visually
+			#      handicapped, text-to-voice progs will pause there
 			Dot=.
 			shift
 			;;
@@ -401,22 +415,22 @@ pr_city() {
    fi
    case "$ccode" in
    (352) # Luxemburg
-         echo "L-${1//[L-]/} $2$Dot" # L-1234
+         echo "L-${1//[L-]/} $2" # L-1234
 	 ;;
     (44) # UK
-         echo -e "$2\n${1%???} ${1: -3}$Dot" # all but last 3 <space> last 3
+         echo -e "$2\n${1%???} ${1: -3}" # all but last 3 <space> last 3
 	 ;;
     (33|43|47|49|385) # France, Austria, Germany, Croatia
-         echo "$1 $2$Dot" 
+         echo "$1 $2" 
 	 ;;
     (32) # Belgium
-         echo "B-${1//[B-]/} $2$Dot" # B-1234
+         echo "B-${1//[B-]/} $2" # B-1234
 	 ;;
     (31) # Netherlands
-         echo "${1:0:4} ${1:4:2} $2$Dot" # first 4 <space> last 2
+         echo "${1:0:4} ${1:4:2} $2" # first 4 <space> last 2
 	 ;;
      (1) # USA
-         echo "$2 ${1:0:2} ${1:2:5}$Dot"
+         echo "$2 ${1:0:2} ${1:2:5}"
 	 ;;
      (*) Warn "country code $ccode not expected" \
               "please add new entry to my pr_city function"
@@ -435,6 +449,7 @@ DOC
 fix() {
    local area i n p v
    eval "p=\$$1"
+   p=${p/+/00}
    case $p in
    ('') eval "$1=''"
         ;;
@@ -525,6 +540,63 @@ pr_sorter() {
 }
 
 :<<'DOC' #---------------------------------------------------------------------
+= pr_tagged
+description:	print in tag:value format
+DOC
+#-------------------------------------------------------------------------------
+pr_tagged() {
+   hc=$(pr_city "$Hzip" "$Hcity" "$Hstate" "$Harea")
+   wc=$(pr_city "$Wzip" "$Wcity" "$Wstate" "$Warea")
+   dn="$First $Middle $Last"
+   home=''
+   work=''
+   [[ -n "$Hstreet$hc$Hcountry$Hphone$Hmail" ]] && home=':x:'  
+   [[ -n "$Wstreet$wc$Wcountry$Wphone$Wmail" ]] && work=':x:'  
+   if [[ $work$home =~ ^:x:$ ]]; then
+      work=''
+      home=''
+   fi
+   fix Hphone
+   fix Mphone
+   fix Wphone
+   a=("Naam:		$dn"
+      "Organisatie:	$Org"
+      "Bijnaam:		$Nick"
+      "Geboortedatum:	$Bday"
+      "Marker;		$Aim"
+      "Mobiel:		$Mphone"
+      "Gegevens thuis:	$home"
+      "Adres:		$Hstreet"
+      ":		$hc"
+      ":		${Hcountry%$Mycountry}"
+      "Telefoon:	$Hphone"
+      "E-mail:		$Hmail"
+      "Gegevens werk:	$work"
+      "Adres:		$Wstreet"
+      ":		$wc"
+      ":		${Wcountry%$Mycountry}"
+      "Telefoon:	$Wphone"
+      "E-mail:		$Wmail"
+      "Notitie:		$Note"
+     )
+   for i in "${a[@]}"; do
+      IFS=: read -r tag val <<<"$i"
+      [[ $val =~ [[:alnum:]] ]] && echo "$tag: $val"
+   done |
+   sed "s/\t\+/\t/
+	s/:\s\+:x://
+	s/^://
+	s/\\\\n/$Dot\\n\t/
+	s/  */ /g   # squeeze spaces
+	s/\. /.~/g
+	s/\t /\t/   # remove space from missing first name
+	s/.$/&$Dot/ # add $Dot to non-empty lines
+   " |
+   expand -16
+   echo
+}
+
+:<<'DOC' #---------------------------------------------------------------------
 = pr_term
 description:	print in terminal format
 DOC
@@ -612,11 +684,14 @@ pr_label() {
       name="$Prefix $First $Last $Middle $Suffix"
       trim name
       [[ -z $name ]] && name="$Org"
-      echo -e "\\C\n$name$Dot\n${street//\\n/$Dot\\n}$Dot"
-      pr_city "$zip" "$city" "$state" "$area" "$Dot"
-      [[ $country == "$Mycountry" ]] || echo "$country$Dot"
+      echo -e "\\C\n$name\n${street//\\n/\\n}"
+      pr_city "$zip" "$city" "$state" "$area" ""
+      [[ $country == "$Mycountry" ]] || echo "$country"
       echo
-   done
+   done |
+   sed "s/\. /.~/g
+	s/...$/&$Dot/ # add $Dot to lines longer than 2 chars (not \C)
+   "
 }
 
 :<<'DOC' #---------------------------------------------------------------------
@@ -858,10 +933,10 @@ mobtest() {
    eval "n=\$$1"
    [[ -z $n ]] && return
    cell=false
-   for i in 316 3247 3248[4-9] 3249[1-9] 33[67] 393[234] 447[45789] \
+   for i in 316 3247 3248[4-9] 3249[1-9] 33[67] 3526.1 393[234] 447[45789] \
             491[567] 599[479][56]
    do
-      if [[ $n =~ $i ]]; then
+      if [[ $n =~ ^\+$i ]]; then
          cell=true
          break
       fi
@@ -883,6 +958,10 @@ light # start with colors for a light background
 
 handle_options "$@"
 set -- "${Args[@]}"
+if [[ -n $Dot ]]; then
+   [[ $Format =~ (tagged|label) ]] ||
+      Warn "--dot option has no effect with --$Format option"
+fi
 
 command -v msort  >/dev/null || die "Please install msort"
 
@@ -1050,6 +1129,7 @@ while read -r file; do
    (xml)     pr_xml;;
    (term)    pr_term;;
    (sorter)  pr_sorter;;
+   (tagged)  pr_tagged;;
    (vcard)   pr_vcard;;
    esac
 done
