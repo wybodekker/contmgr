@@ -38,14 +38,14 @@ contmgr [options] [searchkey]
 
 == Format specific options (b, l, t and T specify relevant formats):
 
--d|--dark	(t)  do not use color in terminal output
+-d|--dark	(t)  set colors for dark background
 -f|--font	(bl) set font and/or bold font and/or pointsize.
 		     Default:
 		      --font='DejaVuSerif,DejaVuSerif-Bold 12'
 		     Argument examples:
 		      'a,b 12' 'a,b' 'a' 'a 12' 'a, 12' ',b' ',b 12' '12'
 		     The last one (|'12'|) changes the pointsize only.
--N|--nocolor	(t)  set colors for dark background
+-N|--nocolor	(t)  do not use color in terminal output
 -n|--noarea=ARG	(bl) in phone numbers, remove area codes with the
 		     value |ARG|, possibly prefixed with 0 (zero)
 -r|--return=ARG	(l)  use |ARG| as returnaddres in labels, commas are 
@@ -174,6 +174,7 @@ handle_options() {
    
    Key='' Noarea='' Grepopt=-ril Format='term' Return=''
    Fsize=12 Font='DejaVuSerif' Bold='DejaVuSerif-Bold' Input="$HOME/Contacts.vcf"
+   Paperwidth=210 Paperheight=297 Cols=3 Rows=8
 
    Mycode='' Dot=''
    Mycountry='Nederland' # this is emptied except in vcard format
@@ -313,6 +314,18 @@ handle_options() {
       esac
    done
    Args=( "$@" )
+}
+
+:<<'DOC' #---------------------------------------------------------------------
+= validateemail
+description:	validate a comma+space-separated email list
+DOC
+#-------------------------------------------------------------------------------
+validateemail() {
+   while IFS=', ' read -r e; do
+      [[ "$e" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$ ]] ||
+        Warn "Invalid email address: $e"
+   done < <(sed 's/, /\n/g' <<<"$1")
 }
 
 :<<'DOC' #---------------------------------------------------------------------
@@ -508,7 +521,8 @@ DOC
 #-------------------------------------------------------------------------------
 displayname() {
    dn="$Last${Last:+,}${First:+ }$First${Middle:+ }$Middle${Nick:+ }$Nick${Org:+ (}$Org${Org:+)}"
-   [[ $dn =~ ^\ \((.*)\)$ ]] && dn=${BASH_REMATCH[1]}
+   dn="${dn# }"
+   [[ $dn =~ ^\((.*)\)$ ]] && dn=${BASH_REMATCH[1]}
    echo "${dn:-—no name—}"
 }
 
@@ -526,7 +540,7 @@ setvar() {
    if [[ -n $current ]]; then 
       Warn "Skipping $2: only one value for $3 allowed"
    else
-      eval "$1=$2"
+      eval "$1='$2'"
    fi
 }
 
@@ -630,7 +644,8 @@ pr_startlabels() { local awa=''
    cat <<-EOD
 	%%!lualatex
 	%%=== labels ===
-	\documentclass[a4paper]{memoir}
+	\documentclass{memoir}
+	\usepackage[papersize={${Paperwidth}mm,${Paperheight}mm}]{geometry}
 	\usepackage{fontspec}
 	\protrudechars=2
 	\adjustspacing=2
@@ -639,7 +654,7 @@ pr_startlabels() { local awa=''
 	\setmainfont{$Font}[BoldFont=$Bold]
 	\usepackage{polyglossia}\setmainlanguage{dutch}
 	\usepackage{labels}
-	\LabelRows=8\LabelCols=3\TopBorder=0mm\BottomBorder=0mm\LeftBorder=7mm\RightBorder=7mm
+	\LabelRows=$Rows\LabelCols=$Cols\TopBorder=0mm\BottomBorder=0mm\LeftBorder=7mm\RightBorder=7mm
 	\newcommand{\bul}{{\hfill$\bullet$}\hfill}
 	\newcommand{\awa}{\begin{minipage}{56mm}
 	  \textbf{\tiny $Return}\\\\%[-.5ex]
@@ -989,7 +1004,6 @@ s/\\,/,/g		# unescape commas
 /^$/d			# remove empty lines
 s/^END:VCARD/&\n/I	# insert empty line after END:VCARD as a record separator for msort.
 s/\r//g			# remove \r for unix line endings
-/N:;;;;/Id		# remove empty N: fields, so that msort uses the ORG: field
 s/;TYPE=\(PREF\|VOICE\|INTERNET\)//gI	# Remove unused types
 s/;TYPE=IPHONE/;TYPE=CELL/gI		# IPHONE is a CELL phone
 /^\(REV\|PRODID\|UID\|VERSION\|FN\|IMPP\):/Id		# remove unused entries
@@ -999,7 +1013,14 @@ s/;TYPE=IPHONE/;TYPE=CELL/gI		# IPHONE is a CELL phone
 /TYPE=\(FAX\|PAGER\)/Id			# remove FAX etc. entries
 ' "$Input" |
 # sort by N and/or ORG:
-msort -qjb -tN: -C -o= -tORG: -C -o= |
+msort --quiet \
+      --suppress-log \
+      --block \
+      --tag=N: \
+        --fold-case \
+      --tag=ORG: \
+        --fold-case \
+        --optional='=' |
 # one file xnnnnn for each vcard:
 csplit --suppress-matched -ksz -fx -n5 - /BEGIN:VCARD/ '{*}'
 
@@ -1039,7 +1060,7 @@ while read -r file; do
          Bday=${BASH_REMATCH[1]}
       elif [[ $line =~ ^EMAIL:(.*) ]]; then
          m="${BASH_REMATCH[1]}"
-         if [[ $m =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$ ]]; then
+         if validateemail $m; then
             [[ -z $Type ]] && filltype ehome ework
             # shellcheck disable=SC2034
             case $Type in
@@ -1051,8 +1072,6 @@ while read -r file; do
                    ;;
                (*) Warn "Skipping email address $m: unrecognized type ($Type)"
             esac
-         else
-            Warn "incorrect email address: '$m'"
          fi
       elif [[ $line =~ ^ADR:(.*)\;(.*)\;(.*)\;(.*)\;(.*)\;(.*)$ ]]; then
          filltype ahome awork
