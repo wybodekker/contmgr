@@ -1,7 +1,7 @@
 #!/bin/bash
 
 Myname="${0##*/}"
-Version=2.03
+Version=2.04
 
 # To do:
 # Option running  ~/Contacts/sortcont ?
@@ -38,20 +38,23 @@ contmgr [options] [searchkey]
 
 == Format specific options (b, l, t and T specify relevant formats):
 
--d|--dark	(t)  set colors for dark background
--f|--font	(bl) set font and/or bold font and/or pointsize.
-		     Default:
-		      --font='DejaVuSerif,DejaVuSerif-Bold 12'
-		     Argument examples:
-		      'a,b 12' 'a,b' 'a' 'a 12' 'a, 12' ',b' ',b 12' '12'
-		     The last one (|'12'|) changes the pointsize only.
--N|--nocolor	(t)  do not use color in terminal output
--n|--noarea=ARG	(bl) in phone numbers, remove area codes with the
-		     value |ARG|, possibly prefixed with 0 (zero)
--r|--return=ARG	(l)  use |ARG| as returnaddres in labels, commas are 
-		     replaced with bullets
-   --dot	(lT) suffix label lines with a dot for visually
-		     handicapped, text-to-voice progs will pause there
+-d|--dark	(t)    set colors for dark background
+-f|--font	(bl)   `set font and/or bold font and/or pointsize.
+		       Default:
+		       --font='DejaVuSerif,DejaVuSerif-Bold 12'
+		       Argument examples:
+		       'a,b 12' 'a,b' 'a' 'a 12' 'a, 12' ',b' ',b 12' '12'
+		       The last one (|'12'|) changes the pointsize only.
+-N|--nocolor	(t)    do not use color in terminal output
+-n|--noarea=ARG	(bl)   in phone numbers, remove area codes with the
+		       value |ARG|, possibly prefixed with 0 (zero)
+-r|--return=ARG	(l)    use |ARG| as returnaddres in labels, commas are 
+		       replaced with bullets
+-B|--blind	(ltTv) suffix label lines with a dot for visually
+		       handicapped, text-to-voice progs will pause there
+		       Boxes the labels. Creates a nickname in vcards
+		       containing most info. The nickname can easily be
+		       invoked to be read aloud on an iphone. 
 
 = Description
 contmgr lists your contacts to standard output. If you provide a search
@@ -166,8 +169,8 @@ handle_options() {
    local options
    options=$(getopt \
       -n "$Myname" \
-      -o bdf:HhIi:k:lNn:r:sTtvVwx \
-      -l booklet,dark,dot,font:,Help,help,input:,key:,labels,noarea:,nocolor,return:,sorter,tagged,term,vcard,version,word,xml \
+      -o bdBf:HhIi:k:lNn:r:sTtvVwx \
+      -l booklet,dark,blind,font:,Help,help,input:,key:,labels,noarea:,nocolor,return:,sorter,tagged,term,vcard,version,word,xml \
       -- "$@"
    ) || exit 1
    eval set -- "$options"
@@ -176,7 +179,7 @@ handle_options() {
    Fsize=12 Font='DejaVuSerif' Bold='DejaVuSerif-Bold' Input="$HOME/Contacts.vcf"
    Paperwidth=210 Paperheight=297 Cols=3 Rows=8
 
-   Mycode='' Dot=''
+   Mycode='' Dot='' Blind=false
    Mycountry='Nederland' # this is emptied except in vcard format
    # shellcheck disable=SC2153
    if [[ -n $PREFIX ]]; then
@@ -297,9 +300,11 @@ handle_options() {
 			Return="${2//,/\\bul }"
 			shift 2
 			;;
-      (   --dot)        # (lT) suffix label lines with a dot for visually
+      (-B|--blind)      # (ltT) suffix label lines with a dot for visually
 			#      handicapped, text-to-voice progs will pause there
+			# Labels will be boxed to force reading horizontally
 			Dot=.
+			Blind=true
 			shift
 			;;
       (-I)	        instscript "$0" ||
@@ -322,10 +327,11 @@ description:	validate a comma+space-separated email list
 DOC
 #-------------------------------------------------------------------------------
 validateemail() {
+   [[ -n $2 ]] && die "validateemail: expect only 1 argument"
    while IFS=', ' read -r e; do
       [[ "$e" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$ ]] ||
         Warn "Invalid email address: $e"
-   done < <(sed 's/, /\n/g' <<<"$1")
+   done <<<"${1//, /$'\n'}"
 }
 
 :<<'DOC' #---------------------------------------------------------------------
@@ -389,11 +395,11 @@ join() {
 = pr_age
 description:	print age; On March 13, 2019:
 		after Bday=2011-03-22
-		pr_age prints (7)
+		pr_age prints (7) or, for blind people: age: 7
 DOC
 #-------------------------------------------------------------------------------
 pr_age() {
-   local byear bmonth bday cyear cmonth cday corr
+   local byear bmonth bday cyear cmonth cday corr age
    if [[ -n $Bday  ]]; then
       IFS=- read -r byear bmonth bday <<<"$Bday"
       IFS=- read -r cyear cmonth cday <<<"$(date +%Y-%m-%d)"
@@ -403,18 +409,26 @@ pr_age() {
       then
          corr=-1
       fi
-      echo "("$((cyear-byear+corr))")"
+      age=$((cyear-byear+corr))
+      if $Blind; then
+         echo "Age: $age"
+      else
+         echo "($age)"
+      fi
    fi
  
 }
 
 :<<'DOC' #---------------------------------------------------------------------
 = pr_city
-synopsis:	 pr_city zip city state areacode
+synopsis:	 pr_city zip city state areacode [Blind]
 description:	Try to format city, state and zip
 		if rules not known, print "city, state, zip"
 		 pr_city 4158CH Deil '' → 4158 CH Deil
 		 pr_city 94595 'Walnut Creek' CA 1 → Walnut Creek CA 94595
+		If there is a 5th argument and it is true, zip codes are printed without 
+		spaces: this is useful for blind people, because spaces cause
+		pronunciation problems for speaking programs.
 DOC
 #-------------------------------------------------------------------------------
 pr_city() {
@@ -426,24 +440,26 @@ pr_city() {
    else
       ccode=$4
    fi
+   space=' '
+   [[ -n $5 ]] && $5 && space=''
    case "$ccode" in
    (352) # Luxemburg
          echo "L-${1//[L-]/} $2" # L-1234
 	 ;;
     (44) # UK
-         echo -e "$2\n${1%???} ${1: -3}" # all but last 3 <space> last 3
+         echo -e "$2\n${1%???}$space${1: -3}" # all but last 3 <space> last 3
 	 ;;
-    (33|43|47|49|385) # France, Austria, Germany, Croatia
+    (33|41|43|47|49|358|385) # France, Switserland, Austria, Germany, Finland, Croatia
          echo "$1 $2" 
 	 ;;
     (32) # Belgium
          echo "B-${1//[B-]/} $2" # B-1234
 	 ;;
     (31) # Netherlands
-         echo "${1:0:4} ${1:4:2} $2" # first 4 <space> last 2
+         echo "${1:0:4}$space${1:4:2} $2" # first 4 <space> last 2
 	 ;;
      (1) # USA
-         echo "$2 ${1:0:2} ${1:2:5}"
+         echo "$2 ${1:0:2}$space${1:2:5}"
 	 ;;
      (*) Warn "country code $ccode not expected" \
               "please add new entry to my pr_city function"
@@ -611,6 +627,35 @@ pr_tagged() {
 }
 
 :<<'DOC' #---------------------------------------------------------------------
+= pr_oneliner
+description:	print in oneliner terminal format
+DOC
+#-------------------------------------------------------------------------------
+pr_oneliner() {
+   fix Hphone
+   fix Mphone
+   fix Wphone
+   hc=$(pr_city "$Hzip" "$Hcity" "$Hstate" "$Harea" $Blind)
+   wc=$(pr_city "$Wzip" "$Wcity" "$Wstate" "$Warea" $Blind)
+   h="$Hpobox, $Hext, $Hstreet, $hc, ${Hcountry%$Mycountry}, $Hphone, $Hmail"
+   w="$Wpobox, $Wext, $Wstreet, $wc, ${Wcountry%$Mycountry}, $Wphone, $Wmail"
+   h=$(sed 's/\(, \)\+/, /g;s/^, //;s/, $//' <<<"$h")
+   w=$(sed 's/\(, \)\+/, /g;s/^, //;s/, $//' <<<"$w")
+   local m=$Mphone n=$Note # for shellcheck
+   ( sed 's/\(, \)\+$/, /' <<<"$Disp, $Bday, $(pr_age), $Aim"
+   if [[ -n $h ]] && [[ -n $w ]]; then
+      echo -n "Huis: $h. "
+      echo -n "Werk: $w. "
+   elif [[ -n $h$w ]]; then
+      echo -n "$h$w. "
+   fi
+   [[ -n $m ]] && echo -n "Mobiel: $m. "
+   [[ -n $n ]] && echo -ne "Note: ${n%'\n'}."
+   ) |fmt -90
+   echo
+}
+
+:<<'DOC' #---------------------------------------------------------------------
 = pr_term
 description:	print in terminal format
 DOC
@@ -620,6 +665,8 @@ pr_term() {
    wc=$(pr_city "$Wzip" "$Wcity" "$Wstate" "$Warea")
    echo -e "$Nor———————————————————————————————————————————————————————————"
    printf "$Yel%-44s%-10s %-5s %s$Nor\n" "$Disp" "$Bday" "$(pr_age)" "$Aim"
+   [[ -n "$Hpobox$Wpobox" ]] && printf "%-30s%-30s\n" "$Hpobox" "$Wpobox"
+   [[ -n "$Hext$Wext" ]] && printf "%-30s%-30s\n" "$Hext" "$Wext"
    [[ -n "$Hstreet$Wstreet" ]] && printf "%-30s%-30s\n" "$Hstreet" "$Wstreet"
    [[ -n "$hc$wc" ]] && printf "%-30s%-30s\n" "$hc" "$wc"
    h="${Hcountry%$Mycountry}"
@@ -654,7 +701,13 @@ pr_startlabels() { local awa=''
 	\setmainfont{$Font}[BoldFont=$Bold]
 	\usepackage{polyglossia}\setmainlanguage{dutch}
 	\usepackage{labels}
-	\LabelRows=$Rows\LabelCols=$Cols\TopBorder=0mm\BottomBorder=0mm\LeftBorder=7mm\RightBorder=7mm
+	\LabelRows=$Rows
+	\LabelCols=$Cols
+	\TopBorder=0mm
+	\BottomBorder=0mm
+	\LeftBorder=7mm
+	\RightBorder=7mm
+	\LabelGrid$Blind
 	\newcommand{\bul}{{\hfill$\bullet$}\hfill}
 	\newcommand{\awa}{\begin{minipage}{56mm}
 	  \textbf{\tiny $Return}\\\\%[-.5ex]
@@ -688,18 +741,22 @@ description:	print in home and work addresses label format
 DOC
 #-------------------------------------------------------------------------------
 pr_label() {
-   local i j street zip city state country area name
+   local i j ext street zip city state country area name
    for i in H W; do
-      for j in street zip city state country area; do
+      for j in pobox ext street zip city state country area; do
          eval $j="\$$i$j"
       done
-      [[ -n $street ]] || continue
+      [[ -n $ext ]] && street="$ext\n$street"
+      [[ -n $street$pobox ]] || continue
       street=${street//#/\\#}
       street=${street//_/\\_}
       name="$Prefix $First $Last $Middle $Suffix"
       trim name
-      [[ -z $name ]] && name="$Org"
-      echo -e "\\C\n$name\n${street//\\n/\\n}"
+      echo "\\C"
+      [[ -n $Org ]] && echo "$Org"
+      [[ -n $name ]] && echo "$name"
+      [[ -n $pobox ]] && echo -e "$pobox"
+      [[ -n $street ]] && echo -e "${street//\\n/\\n}"
       pr_city "$zip" "$city" "$state" "$area" ""
       [[ $country == "$Mycountry" ]] || echo "$country"
       echo
@@ -769,12 +826,14 @@ pr_booklet() {
    texescape Org
    local i j street zip city state country
    for i in H W; do
-      for j in street zip city state country area; do
+      for j in pobox ext street zip city state country area; do
          eval $j="\$$i$j"
       done
-      # create an address only if there is a street:
-      if [[ -n $street ]]; then
+      # create an address only if there is a street or a PO box:
+      if [[ -n $street$pobox ]]; then
          adr+="$(join "\n" \
+             "$pobox" \
+             "$ext" \
              "$street" \
              "$(pr_city "$zip" "$city" "$state" "$area")" \
              "${country%$Mycountry}" "|"
@@ -867,8 +926,8 @@ pr_vcard() {
    local h w i hmw typarr
    declare -A typarr=([H]=HOME [M]=CELL [W]=WORK)
    echo -e "BEGIN:VCARD\nVERSION:3.0"
-   h="ADR;TYPE=HOME:;;$Hstreet;$Hcity;$Hstate;${Hzip// /};$Hcountry"
-   w="ADR;TYPE=WORK:;;$Wstreet;$Wcity;$Wstate;${Wzip// /};$Wcountry"
+   h="ADR;TYPE=HOME:$Hpobox;$Hext;$Hstreet;$Hcity;$Hstate;${Hzip// /};$Hcountry"
+   w="ADR;TYPE=WORK:$Wpobox;$Wext;$Wstreet;$Wcity;$Wstate;${Wzip// /};$Wcountry"
    for i in "$h" "$w"; do
       if [[ ! $i =~ \;\;\;\;\;\;$ ]]; then
          [[ $i =~ \;$ ]] && i+="$Mycountry"
@@ -880,9 +939,11 @@ pr_vcard() {
    [[ -n $Wmail ]] && printf "EMAIL;TYPE=WORK:%s\n" "$Wmail"
    echo "FN:$Disp"
    echo "N:$Last;$First;$Middle;$Prefix;$Suffix"
-   [[ -n $Nick ]] && echo "NICKNAME:${Nick:1:-1}"
-   [[ -n $Note ]] && echo "NOTE:$Note"
-   [[ -n $Org  ]] && echo "ORG:$Org"
+   [[ -n $Nick  ]] && ! $Blind && echo "NICKNAME:${Nick:1:-1}"
+   [[ -n $Note  ]] && echo "NOTE:$Note"
+   [[ -n $Org   ]] && echo "ORG:$Org"
+   [[ -n $Harea ]] && echo "X-CCODE-HOME:$Harea"
+   [[ -n $Warea ]] && echo "X-CCODE-WORK:$Warea"
    set -- HOME CELL WORK
    for hmw in H M W; do
       eval "i=\$${hmw}phone"
@@ -893,6 +954,8 @@ pr_vcard() {
    done
    [[ -n $Url ]] && echo "URL:$Url"
    [[ -n $Aim ]] && echo "IMPP;X-SERVICE-TYPE=AIM:aim:$Aim"
+   # do this at the end, because pr_oneliner changes the phone nrs:
+   $Blind && echo "NICKNAME:$(pr_oneliner)"
    echo -e 'END:VCARD\n'
 }
 
@@ -973,10 +1036,6 @@ light # start with colors for a light background
 
 handle_options "$@"
 set -- "${Args[@]}"
-if [[ -n $Dot ]]; then
-   [[ $Format =~ (tagged|label) ]] ||
-      Warn "--dot option has no effect with --$Format option"
-fi
 
 command -v msort  >/dev/null || die "Please install msort"
 
@@ -1029,11 +1088,12 @@ find . -type f -name 'x*' -print0 |
 xargs --null grep $Grepopt "$searchkey" |
 sort |
 while read -r file; do
-   unset Aim Bday Disp First Hcity Hcountry Hmail Hphone Hstate \
-         Hstreet Hzip Last Middle Mphone Nick Note Org Prefix Suffix Url Wcity \
-         Wcountry Wmail Wphone Wstate Wstreet Wzip \
-         ahome awork phome pcell pwork ehome ework
-	 Harea='' Warea=''
+   unset Aim Bday Disp First \
+	 Hcity Hcountry Hext Hmail Hphone Hpobox Hstate Hstreet Hzip \
+	 Last Middle Mphone Nick Note Org Prefix Suffix Url \
+	 Wcity Wcountry Wext Wmail Wphone Wpobox Wstate Wstreet Wzip \
+	 ahome awork ehome ework pcell phome pwork
+   Harea='' Warea=''
    while IFS= read -r line; do
       Type=''
       if [[ $line =~ TYPE=([[:alpha:]]*) ]]; then
@@ -1060,7 +1120,7 @@ while read -r file; do
          Bday=${BASH_REMATCH[1]}
       elif [[ $line =~ ^EMAIL:(.*) ]]; then
          m="${BASH_REMATCH[1]}"
-         if validateemail $m; then
+         if validateemail "$m"; then
             [[ -z $Type ]] && filltype ehome ework
             # shellcheck disable=SC2034
             case $Type in
@@ -1073,27 +1133,31 @@ while read -r file; do
                (*) Warn "Skipping email address $m: unrecognized type ($Type)"
             esac
          fi
-      elif [[ $line =~ ^ADR:(.*)\;(.*)\;(.*)\;(.*)\;(.*)\;(.*)$ ]]; then
+      elif [[ $line =~ ^ADR:(.*)\;(.*)\;(.*)\;(.*)\;(.*)\;(.*)\;(.*)$ ]]; then
          filltype ahome awork
          # shellcheck disable=SC2034
          case $Type in
          (home)
              ahome=1
-             Hstreet="${BASH_REMATCH[2]}"
-             Hcity="${BASH_REMATCH[3]}"
-             Hstate="${BASH_REMATCH[4]}"
-             Hzip="${BASH_REMATCH[5]^^}"
+	     Hpobox="${BASH_REMATCH[1]}"
+             Hext="${BASH_REMATCH[2]}"
+             Hstreet="${BASH_REMATCH[3]}"
+             Hcity="${BASH_REMATCH[4]}"
+             Hstate="${BASH_REMATCH[5]}"
+             Hzip="${BASH_REMATCH[6]^^}"
              Hzip="${Hzip// /}"
-             Hcountry="${BASH_REMATCH[6]/Netherlands/Nederland}"
+             Hcountry="${BASH_REMATCH[7]/Netherlands/Nederland}"
              ;;
          (work)
              awork=1
-             Wstreet="${BASH_REMATCH[2]}"
-             Wcity="${BASH_REMATCH[3]}"
-             Wstate="${BASH_REMATCH[4]}"
-             Wzip="${BASH_REMATCH[5]^^}"
+             Wpobox="${BASH_REMATCH[1]}"
+             Wext="${BASH_REMATCH[2]}"
+             Wstreet="${BASH_REMATCH[3]}"
+             Wcity="${BASH_REMATCH[4]}"
+             Wstate="${BASH_REMATCH[5]}"
+             Wzip="${BASH_REMATCH[6]^^}"
              Wzip="${Wzip// /}"
-             Wcountry="${BASH_REMATCH[6]/Netherlands/Nederland}"
+             Wcountry="${BASH_REMATCH[7]/Netherlands/Nederland}"
              ;;
         ('') Warn "Already have home and work addresses, skipping $line"
              ;;
@@ -1146,7 +1210,7 @@ while read -r file; do
    (labels)  pr_label;;
    (booklet) pr_booklet;;
    (xml)     pr_xml;;
-   (term)    pr_term;;
+   (term)    if $Blind; then pr_oneliner; else pr_term; fi;;
    (sorter)  pr_sorter;;
    (tagged)  pr_tagged;;
    (vcard)   pr_vcard;;
