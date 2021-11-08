@@ -67,40 +67,40 @@ variable CONTACTS, unless it is given with the |--input| option.
 
 There are some limitations on the data that are read from that
 vcard file. The following table shows the vcard fields that are stored
-and the formats (v=vcard, x=xml, t=terminal, b=booklet, l=label)
+and the formats (v=vcard, T=tagged, x=xml, t=terminal, b=booklet, l=label)
 in which they are reproduced:
 
-Last	 vxtbl N 1
-First	 vxtbl N 2
-Middle	 vxtb- N 3
-Prefix	 v---- N 4
-Suffix	 v---- N 5
-Nick	 vxtb- NICKNAME
-Disp	 ----- FN (unused, reconstructed from above entries)
-Org	 vxtb- ORG
-Url	 v-t-- URL
-Bday	 v-t-- BDAY
-Hmail	 vxt-- EMAIL;TYPE=HOME
-Wmail	 vxt-- EMAIL;TYPE=WORK
-Hpobox	 v-tbl ADR;TYPE=HOME 1
-Hext	 v-tbl ADR;TYPE=HOME 2
-Hstreet	 v-tbl ADR;TYPE=HOME 3
-Hcity	 v-tbl ADR;TYPE=HOME 4
-Hstate	 v-tbl ADR;TYPE=HOME 5
-Hzip	 v-tbl ADR;TYPE=HOME 6
-Hcntry	 v-tbl ADR;TYPE=HOME 7
-Wpobox	 v-tbl ADR;TYPE=WORK 1
-Wext	 v-tbl ADR;TYPE=WORK 2
-Wstreet	 v-t-- ADR;TYPE=WORK 3
-Wcity	 v-t-- ADR;TYPE=WORK 4
-Wstate	 v-t-- ADR;TYPE=WORK 5
-Wzip	 v-t-- ADR;TYPE=WORK 6
-Wcntry	 v-t-- ADR;TYPE=WORK 7
-Aim	 v-t-- X-AIM
-Hphone	 vxt-- TEL;TYPE=HOME
-Wphone	 vxt-- TEL;TYPE=WORK
-Mphone	 vxt-- TEL;TYPE=CELL
-Note	 v-tb- NOTE
+Last	 vTxtbl  N 1
+First	 vTxtbl  N 2
+Middle	 vTxtb-  N 3
+Prefix	 vT-tbl  N 4
+Suffix	 vT-tbl  N 5
+Nick	 vTxtb-  NICKNAME
+Disp	 vT----  FN (unused, reconstructed from above entries)
+Org	 vTxtb-  ORG
+Url	 vT-t--  URL
+Bday	 vT-t--  BDAY
+Hmail	 vTxt--  EMAIL;TYPE=HOME
+Wmail	 vTxt--  EMAIL;TYPE=WORK
+Hpobox	 vT-tbl  ADR;TYPE=HOME 1
+Hext	 vT-tbl  ADR;TYPE=HOME 2
+Hstreet	 vT-tbl  ADR;TYPE=HOME 3
+Hcity	 vT-tbl  ADR;TYPE=HOME 4
+Hstate	 vT-tbl  ADR;TYPE=HOME 5
+Hzip	 vT-tbl  ADR;TYPE=HOME 6
+Hcntry	 vT-tbl  ADR;TYPE=HOME 7
+Wpobox	 vT-tbl  ADR;TYPE=WORK 1
+Wext	 vT-tbl  ADR;TYPE=WORK 2
+Wstreet	 vT-tbl  ADR;TYPE=WORK 3
+Wcity	 vT-tbl  ADR;TYPE=WORK 4
+Wstate	 vT-tbl  ADR;TYPE=WORK 5
+Wzip	 vT-tbl  ADR;TYPE=WORK 6
+Wcntry	 vT-tbl  ADR;TYPE=WORK 7
+Aim	 vT-t--  X-AIM
+Hphone	 vTxt--  TEL;TYPE=HOME
+Wphone	 vTxt--  TEL;TYPE=WORK
+Mphone	 vTxt--  TEL;TYPE=CELL
+Note	 vT-tb-  NOTE
 
 = Configuration
 The defaults for some variables, like font, fontsize, vcard file, and
@@ -536,7 +536,7 @@ description:	print Last, First (Organization), but clean up if some are empty.
 DOC
 #-------------------------------------------------------------------------------
 displayname() {
-   dn="$Last${Last:+,}${First:+ }$First${Middle:+ }$Middle${Nick:+ }$Nick${Org:+ (}$Org${Org:+)}"
+   dn="$Last${Suffix:+ }$Suffix${Last:+, }$Prefix${Prefix:+ }$First${First:+ }$Middle${Middle:+ }$Nick${Nick:+ }${Org:+ (}$Org${Org:+)}"
    dn="${dn# }"
    [[ $dn =~ ^\((.*)\)$ ]] && dn=${BASH_REMATCH[1]}
    echo "${dn:-—no name—}"
@@ -577,7 +577,7 @@ DOC
 pr_tagged() {
    hc=$(pr_city "$Hzip" "$Hcity" "$Hstate" "$Harea")
    wc=$(pr_city "$Wzip" "$Wcity" "$Wstate" "$Warea")
-   dn="$First $Middle $Last"
+   dn="$Prefix $First $Middle $Last $Suffix"
    home=''
    work=''
    [[ -n "$Hstreet$hc$Hcountry$Hphone$Hmail" ]] && home=':x:'  
@@ -637,21 +637,21 @@ pr_oneliner() {
    fix Wphone
    hc=$(pr_city "$Hzip" "$Hcity" "$Hstate" "$Harea" $Blind)
    wc=$(pr_city "$Wzip" "$Wcity" "$Wstate" "$Warea" $Blind)
-   h="$Hpobox, $Hext, $Hstreet, $hc, ${Hcountry%$Mycountry}, $Hphone, $Hmail"
-   w="$Wpobox, $Wext, $Wstreet, $wc, ${Wcountry%$Mycountry}, $Wphone, $Wmail"
+   h="$Hpobox, $Hext, $Hstreet, $hc, ${Hcountry%$Mycountry}, $Hphone, ${Hmail/@/ apestaartje }"
+   w="$Wpobox, $Wext, $Wstreet, $wc, ${Wcountry%$Mycountry}, $Wphone, ${Wmail/@/ apestaartje }"
    h=$(sed 's/\(, \)\+/, /g;s/^, //;s/, $//' <<<"$h")
    w=$(sed 's/\(, \)\+/, /g;s/^, //;s/, $//' <<<"$w")
    local m=$Mphone n=$Note # for shellcheck
    ( sed 's/\(, \)\+$/, /' <<<"$Disp, $Bday, $(pr_age), $Aim"
    if [[ -n $h ]] && [[ -n $w ]]; then
-      echo -n "Huis: $h. "
+      echo -n "$h. "
       echo -n "Werk: $w. "
    elif [[ -n $h$w ]]; then
       echo -n "$h$w. "
    fi
-   [[ -n $m ]] && echo -n "Mobiel: $m. "
+   [[ -n $m ]] && echo -n "$m. "
    [[ -n $n ]] && echo -ne "Note: ${n%'\n'}."
-   ) |fmt -90
+   ) |fmt -110
    echo
 }
 
@@ -820,7 +820,7 @@ DOC
 pr_booklet() {
    ((gray=!gray))
    local G=('\G' '  ') g=${G[$gray]}
-   local adr='' name="$Last"
+   local adr='' name="$Last $Suffix"
    [[ -z $name ]] && name="$Org"
    texescape name
    texescape Org
@@ -851,7 +851,7 @@ pr_booklet() {
    fix Wphone
    Hmail=${Hmail//_/\\_}
    Wmail=${Wmail//_/\\_}
-   echo -n "$g\Red{$name} $First"
+   echo -n "$g\Red{$name} $Prefix $First"
    [[ -n $Middle ]] && echo -n " $Middle"
    [[ -n $Nick ]] && echo -n " $Nick"
    [[ -n $Org ]] && [[ ! $name == "$Org" ]] && echo -n " ($Org)"
