@@ -538,6 +538,7 @@ DOC
 displayname() {
    dn="$Last${Suffix:+ }$Suffix${Last:+, }$Prefix${Prefix:+ }$First${First:+ }$Middle${Middle:+ }$Nick${Nick:+ }${Org:+ (}$Org${Org:+)}"
    dn="${dn# }"
+   dn="${dn% }"
    [[ $dn =~ ^\((.*)\)$ ]] && dn=${BASH_REMATCH[1]}
    echo "${dn:-—no name—}"
 }
