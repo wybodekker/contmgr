@@ -1072,15 +1072,16 @@ s/;TYPE=IPHONE/;TYPE=CELL/gI		# IPHONE is a CELL phone
 /TEL[;:]/Is/:0/:+'"$Mycode"'/		# 0 → +31
 /TYPE=\(FAX\|PAGER\)/Id			# remove FAX etc. entries
 ' "$Input" |
-# sort by N and/or ORG:
+# sort by N and/or ORG, ignore ‘ and ' at start of N-field:
 msort --quiet \
       --suppress-log \
       --block \
-      --tag=N: \
+      --tag="N:['‘]?" \
         --fold-case \
       --tag=ORG: \
         --fold-case \
-        --optional='=' |
+        --optional='=' \
+	|
 # one file xnnnnn for each vcard:
 csplit --suppress-matched -ksz -fx -n5 - /BEGIN:VCARD/ '{*}'
 
