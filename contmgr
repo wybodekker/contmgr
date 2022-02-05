@@ -470,14 +470,16 @@ pr_city() {
 :<<'DOC' #---------------------------------------------------------------------
 = fix
 synopsis:	 fix phonenumber
-description:	insert spaces in phone number; argument is name of the number
-		 Hphone=0630333955
-		 fix Hphone && echo $Hphone → 06 3033 3955
+description:	replace any |Mycode| with 0 and insert spaces in phone number;
+		argument is name of the number; for The Netherlands (31):
+		 Hphone=+31630333955
+		 fix Hphone && echo $Hphone # → 06 3033 3955
 DOC
 #-------------------------------------------------------------------------------
 fix() {
    local area i n p v
    eval "p=\$$1"
+   p=${p/+$Mycode/0}
    p=${p/+/00}
    case $p in
    ('') eval "$1=''"
@@ -633,16 +635,12 @@ description:	print in oneliner terminal format
 DOC
 #-------------------------------------------------------------------------------
 pr_oneliner() {
-   fix Hphone
-   fix Mphone
-   fix Wphone
    hc=$(pr_city "$Hzip" "$Hcity" "$Hstate" "$Harea" $Blind)
    wc=$(pr_city "$Wzip" "$Wcity" "$Wstate" "$Warea" $Blind)
-   h="$Hpobox, $Hext, $Hstreet, $hc, ${Hcountry%$Mycountry}, $Hphone, ${Hmail/@/ apestaartje }"
-   w="$Wpobox, $Wext, $Wstreet, $wc, ${Wcountry%$Mycountry}, $Wphone, ${Wmail/@/ apestaartje }"
-   h=$(sed 's/\(, \)\+/, /g;s/^, //;s/, $//' <<<"$h")
-   w=$(sed 's/\(, \)\+/, /g;s/^, //;s/, $//' <<<"$w")
-   local m=$Mphone n=$Note # for shellcheck
+   h="$Hpobox, $Hext, $Hstreet, $hc, ${Hcountry%$Mycountry}"
+   w="$Wpobox, $Wext, $Wstreet, $wc, ${Wcountry%$Mycountry}"
+   h=$(sed 's/\\n/, /g;s/\(, \)\+/, /g;s/^, //;s/, $//' <<<"$h")
+   w=$(sed 's/\\n/, /g;s/\(, \)\+/, /g;s/^, //;s/, $//' <<<"$w")
    ( sed 's/\(, \)\+$/, /' <<<"$Disp, $Bday, $(pr_age), $Aim"
    if [[ -n $h ]] && [[ -n $w ]]; then
       echo -n "$h. "
@@ -650,9 +648,8 @@ pr_oneliner() {
    elif [[ -n $h$w ]]; then
       echo -n "$h$w. "
    fi
-   [[ -n $m ]] && echo -n "$m. "
-   [[ -n $n ]] && echo -ne "Note: ${n%'\n'}."
    ) |fmt -110
+   echo
    echo
 }
 
@@ -955,7 +952,7 @@ pr_vcard() {
    done
    [[ -n $Url ]] && echo "URL:$Url"
    [[ -n $Aim ]] && echo "IMPP;X-SERVICE-TYPE=AIM:aim:$Aim"
-   # do this at the end, because pr_oneliner changes the phone nrs:
+   # do this at the end, in case pr_oneliner changes the phone nrs:
    $Blind && echo "NICKNAME:$(pr_oneliner)"
    echo -e 'END:VCARD\n'
 }
@@ -1027,10 +1024,6 @@ mobtest() {
          Warn "$2 phone $n does not look like a mobile number"
       fi
    fi
-   if [[ $Format != vcard ]]; then
-      n=${n/+$Mycode/0}
-      eval "$1=\$n"
-   fi
 }
 
 light # start with colors for a light background
@@ -1058,6 +1051,10 @@ case $Format in
 (term)    ;;
 esac
 
+# remove \r for unix line endings,
+# remove waid=[0-9]* (can occur in phone numbers)
+# join lines starting with space (=continuation lines) with previous line
+sed 'N;s/;waid=[0-9]\+//;s/\r//g;s/\n //g;P;D' "$Input" |
 sed '
 /^ITEM[0-9]\..*/Is/ITEM[0-9]\.//I	# remove ITEMs
 s/\\,/,/g		# unescape commas
@@ -1066,21 +1063,20 @@ s/^END:VCARD/&\n/I	# insert empty line after END:VCARD as a record separator for
 s/\r//g			# remove \r for unix line endings
 s/;TYPE=\(PREF\|VOICE\|INTERNET\)//gI	# Remove unused types
 s/;TYPE=IPHONE/;TYPE=CELL/gI		# IPHONE is a CELL phone
-/^\(REV\|PRODID\|UID\|VERSION\|FN\|IMPP\):/Id		# remove unused entries
+/^\(REV\|PRODID\|UID\|VERSION\|IMPP\):/Id		# remove unused entries
+/^N:;;;;/d				# remove if empty
+/^ORG:$/d
 /TEL[:;]/Is/[() ~ -]//g			# + and digits only
 /TEL[;:]/Is/:00/:+/			# 00 → +
 /TEL[;:]/Is/:0/:+'"$Mycode"'/		# 0 → +31
 /TYPE=\(FAX\|PAGER\)/Id			# remove FAX etc. entries
-' "$Input" |
+' |
 # sort by N and/or ORG, ignore ‘ and ' at start of N-field:
 msort --quiet \
       --suppress-log \
       --block \
-      --tag="N:['‘]?" \
+      --tag="FN:['‘]?" \
         --fold-case \
-      --tag=ORG: \
-        --fold-case \
-        --optional='=' \
 	|
 # one file xnnnnn for each vcard:
 csplit --suppress-matched -ksz -fx -n5 - /BEGIN:VCARD/ '{*}'
@@ -1195,6 +1191,11 @@ while read -r file; do
          esac
       elif [[ $line =~ ^NOTE:(.*) ]]; then
          Note=${BASH_REMATCH[1]}
+      elif [[ $line =~ ^FN: ]]; then
+         true
+      elif [[ $Format != vcard ]]; then
+         Warn "Unexpected field: $line" \
+	      "Your input file ($file) needs to be cleaned"
       fi
    done < "$file"
 
@@ -1203,7 +1204,6 @@ while read -r file; do
    [[ -n $Key ]] && [[ ! $Aim == "$Key" ]] && continue
 
    # Check if phone numbers are cell/not cell as expected
-   # and replace initial +$Mycode with 0:
    mobtest "Hphone" home false
    mobtest "Wphone" work false
    mobtest "Mphone" mobile true
