@@ -23,7 +23,7 @@ contmgr [options] [searchkey]
 		if ARG has no path info, the file is suppposed to reside
 		in the same directory as the default input file.
 -k|--key=ARG	selection key; selects records containing
-		|ARG| in the X-AIM field
+		|ARG| in the TITLE field
 -w|--word	search key must be a complete word
 
 == Format options:
@@ -96,7 +96,7 @@ Wcity	 vT-tbl  ADR;TYPE=WORK 4
 Wstate	 vT-tbl  ADR;TYPE=WORK 5
 Wzip	 vT-tbl  ADR;TYPE=WORK 6
 Wcntry	 vT-tbl  ADR;TYPE=WORK 7
-Aim	 vT-t--  X-AIM
+Keys	 vT-t--  TITLE
 Hphone	 vTxt--  TEL;TYPE=HOME
 Wphone	 vTxt--  TEL;TYPE=WORK
 Mphone	 vTxt--  TEL;TYPE=CELL
@@ -220,7 +220,7 @@ handle_options() {
 			shift 2
 			;;
       (-k|--key=ARG)    # selection key; selects records containing
-			# |ARG| in the X-AIM field
+			# |ARG| in the TITLE field
 			Key="$2"
 			shift 2
 			;;
@@ -569,7 +569,7 @@ description:	print only first line of terminal format
 DOC
 #-------------------------------------------------------------------------------
 pr_sorter() {
-   printf "%b %b %b %b\n" "$Disp" "$Bday" "$(pr_age)" "$Aim"
+   printf "%b %b %b %b\n" "$Disp" "$Bday" "$(pr_age)" "$Keys"
 }
 
 :<<'DOC' #---------------------------------------------------------------------
@@ -596,7 +596,7 @@ pr_tagged() {
       "Organisatie:	$Org"
       "Bijnaam:		$Nick"
       "Geboortedatum:	$Bday"
-      "Marker;		$Aim"
+      "Marker;		$Keys"
       "Mobiel:		$Mphone"
       "Gegevens thuis:	$home"
       "Adres:		$Hstreet"
@@ -641,7 +641,7 @@ pr_oneliner() {
    w="$Wpobox, $Wext, $Wstreet, $wc, ${Wcountry%$Mycountry}"
    h=$(sed 's/\\n/, /g;s/\(, \)\+/, /g;s/^, //;s/, $//' <<<"$h")
    w=$(sed 's/\\n/, /g;s/\(, \)\+/, /g;s/^, //;s/, $//' <<<"$w")
-   ( sed 's/\(, \)\+$/, /' <<<"$Disp, $Bday, $(pr_age), $Aim"
+   ( sed 's/\(, \)\+$/, /' <<<"$Disp, $Bday, $(pr_age), $Keys"
    if [[ -n $h ]] && [[ -n $w ]]; then
       echo -n "$h. "
       echo -n "Werk: $w. "
@@ -662,7 +662,7 @@ pr_term() {
    hc=$(pr_city "$Hzip" "$Hcity" "$Hstate" "$Harea")
    wc=$(pr_city "$Wzip" "$Wcity" "$Wstate" "$Warea")
    echo -e "$Nor———————————————————————————————————————————————————————————"
-   printf "$Yel%-44s%-10s %-5s %s$Nor\n" "$Disp" "$Bday" "$(pr_age)" "$Aim"
+   printf "$Yel%-44s%-10s %-5s %s$Nor\n" "$Disp" "$Bday" "$(pr_age)" "$Keys"
    [[ -n "$Hpobox$Wpobox" ]] && printf "%-30s%-30s\n" "$Hpobox" "$Wpobox"
    [[ -n "$Hext$Wext" ]] && printf "%-30s%-30s\n" "$Hext" "$Wext"
    [[ -n "$Hstreet$Wstreet" ]] && printf "%-30s%-30s\n" "$Hstreet" "$Wstreet"
@@ -951,7 +951,7 @@ pr_vcard() {
       shift
    done
    [[ -n $Url ]] && echo "URL:$Url"
-   [[ -n $Aim ]] && echo "IMPP;X-SERVICE-TYPE=AIM:aim:$Aim"
+   [[ -n $Keys ]] && echo "TITLE:$Keys"
    # do this at the end, in case pr_oneliner changes the phone nrs:
    $Blind && echo "NICKNAME:$(pr_oneliner)"
    echo -e 'END:VCARD\n'
@@ -1088,7 +1088,7 @@ find . -type f -name 'x*' -print0 |
 xargs --null grep $Grepopt "$searchkey" |
 sort |
 while read -r file; do
-   unset Aim Bday Disp First \
+   unset Keys Bday Disp First \
 	 Hcity Hcountry Hext Hmail Hphone Hpobox Hstate Hstreet Hzip \
 	 Last Middle Mphone Nick Note Org Prefix Suffix Url \
 	 Wcity Wcountry Wext Wmail Wphone Wpobox Wstate Wstreet Wzip \
@@ -1167,8 +1167,8 @@ while read -r file; do
          Harea=${BASH_REMATCH[1]}
       elif [[ $line =~ ^X-CCODE-WORK:(.*) ]]; then
          Warea=${BASH_REMATCH[1]}
-      elif [[ $line =~ ^X-AIM.*:(.*)$ ]]; then
-         Aim=${BASH_REMATCH[1]}
+      elif [[ $line =~ ^TITLE:(.*)$ ]]; then
+         Keys=${BASH_REMATCH[1]}
       elif [[ $line =~ ^TEL:(.*) ]]; then
          v="${BASH_REMATCH[1]}"
          if [[ ! $v =~ ^(11|14|\+)[0-9]+$ ]]; then
@@ -1203,7 +1203,7 @@ while read -r file; do
 
    # If a key was specified, print only if the record has that key.
    # No key specified, just print.
-   [[ -n $Key ]] && [[ ! $Aim == "$Key" ]] && continue
+   [[ -n $Key ]] && [[ ! $Keys == "$Key" ]] && continue
 
    # Check if phone numbers are cell/not cell as expected
    mobtest "Hphone" home false
