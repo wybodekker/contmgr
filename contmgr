@@ -1,7 +1,7 @@
 #!/bin/bash
 
 Myname="${0##*/}"
-Version=2.04
+Version=2.05
 
 # To do:
 # Option running  ~/Contacts/sortcont ?
@@ -1063,9 +1063,10 @@ s/\\,/,/g		# unescape commas
 /^$/d			# remove empty lines
 s/^END:VCARD/&\n/I	# insert empty line after END:VCARD as a record separator for msort.
 s/\r//g			# remove \r for unix line endings
-s/;TYPE=\(PREF\|VOICE\|INTERNET\)//gI	# Remove unused types
+s/;TYPE=\(VOICE\|INTERNET\)//gI		# Remove unused types
 s/;TYPE=IPHONE/;TYPE=CELL/gI		# IPHONE is a CELL phone
-/^\(REV\|PRODID\|UID\|VERSION\|IMPP\):/Id		# remove unused entries
+s/;PREF=[0-9]\+//gI			# remove PREF=n
+/^\(REV\|PRODID\|UID\|VERSION\|IMPP\):/Id# remove unused entries
 /^N:;;;;/d				# remove if empty
 /^ORG:$/d
 /TEL[:;]/Is/[() ~ -]//g			# + and digits only
