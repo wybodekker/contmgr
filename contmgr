@@ -592,22 +592,18 @@ pr_tagged() {
    fix Hphone
    fix Mphone
    fix Wphone
-   a=("Naam:		$dn"
+   a=("Naam:		$Disp"
       "Organisatie:	$Org"
       "Bijnaam:		$Nick"
       "Geboortedatum:	$Bday"
       "Marker;		$Keys"
       "Mobiel:		$Mphone"
       "Gegevens thuis:	$home"
-      "Adres:		$Hstreet"
-      ":		$hc"
-      ":		${Hcountry%$Mycountry}"
+      "Adres:		$Hpobox $Hstreet $hc ${Hcountry%$Mycountry}"
       "Telefoon:	$Hphone"
       "E-mail:		$Hmail"
       "Gegevens werk:	$work"
-      "Adres:		$Wstreet"
-      ":		$wc"
-      ":		${Wcountry%$Mycountry}"
+      "Adres:		$Wpobox $Wstreet $wc ${Wcountry%$Mycountry}"
       "Telefoon:	$Wphone"
       "E-mail:		$Wmail"
       "Notitie:		$Note"
@@ -675,7 +671,7 @@ pr_term() {
    fix Wphone
    [[ -n "$Hphone$Mphone$Wphone" ]] &&
       printf "%-20s$Mag%-20s$Nor%-20s\n" "$Hphone" "$Mphone" "$Wphone"
-   [[ -n "$Hmail$Wmail" ]] && printf "$Blu%-27s%27s\n" "$Hmail" "$Wmail"
+   [[ -n "$Hmail$Wmail" ]] && printf "$Blu%-27s%27s$Nor\n" "$Hmail" "$Wmail"
    [[ -n $Note ]] && echo -e "${Note%'\n'}" |fmt -60
 }
 

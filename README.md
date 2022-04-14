@@ -5,7 +5,7 @@
 |    type | bash
 |  author | Wybo Dekker
 |   email | wybo@dekkerdocumenten.nl
-| version | 2.04
+| version | 2.05
 | license | GNU General Public License
 
 contmgr lists your contacts to standard output. If you provide a search
