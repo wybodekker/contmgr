@@ -474,11 +474,13 @@ description:	replace any |Mycode| with 0 and insert spaces in phone number;
 		argument is name of the number; for The Netherlands (31):
 		 Hphone=+31630333955
 		 fix Hphone && echo $Hphone # → 06 3033 3955
+returns:	1 if the phone number is empty, else 0
 DOC
 #-------------------------------------------------------------------------------
 fix() {
    local area i n p v
    eval "p=\$$1"
+   [[ -z $p ]] && return 1
    p=${p/+$Mycode/0}
    p=${p/+/00}
    case $p in
@@ -637,13 +639,16 @@ pr_oneliner() {
    w="$Wpobox, $Wext, $Wstreet, $wc, ${Wcountry%$Mycountry}"
    h=$(sed 's/\\n/, /g;s/\(, \)\+/, /g;s/^, //;s/, $//' <<<"$h")
    w=$(sed 's/\\n/, /g;s/\(, \)\+/, /g;s/^, //;s/, $//' <<<"$w")
-   ( sed 's/\(, \)\+$/, /' <<<"$Disp, $Bday, $(pr_age), $Keys"
+   ( sed 's/\(, \)\+$/, /g' <<<"$Disp, $Bday, $(pr_age)"
    if [[ -n $h ]] && [[ -n $w ]]; then
       echo -n "$h. "
       echo -n "Werk: $w. "
    elif [[ -n $h$w ]]; then
       echo -n "$h$w. "
    fi
+   fix Hphone && printf "%s. " "$Hphone"
+   fix Mphone && printf "%s. " "$Mphone"
+   fix Wphone && printf "%s. " "$Wphone"
    ) |fmt -110
    echo
    echo
