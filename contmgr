@@ -16,45 +16,44 @@ contmgr [options] [searchkey]
 
 == General options:
 
--h|--help	Print this help and exit
--H|--Help	Show full documentation and exit
--V|--version	Print version and exit
--i|--input=ARG	Take input from file |ARG| with default extension vcf;
-		if ARG has no path info, the file is suppposed to reside
+-h,--help	Print this help and exit
+-H,--Help	Show full documentation and exit
+-V,--version	Print version and exit
+-i,--input=X	Take input from file X with default extension vcf;
+		if X has no path info, the file is supposed to reside
 		in the same directory as the default input file.
--k|--key=ARG	selection key; selects records containing
-		|ARG| in the TITLE field
--w|--word	search key must be a complete word
+-k,--key=X	select records containing key X in the TITLE field
+-w,--word	search key must be a complete word
 
 == Format options:
 
--b|--booklet	print booklet
--l|--labels	print address labels
--s|--sorter	print only first line of |--term| format
--T|--tagged	print tag / value list
--t|--term	print to terminal
--v|--vcard	print vcards
--x|--xml	print xml for FritzBox
+-b,--booklet	print booklet
+-l,--labels	print address labels
+-s,--sorter	print only first line of |--term| format
+-T,--tagged	print tag / value list
+-t,--term	print to terminal
+-v,--vcard	print vcards
+-x,--xml	print xml for FritzBox
 
 == Format specific options (b, l, t and T specify relevant formats):
 
--d|--dark	(t)    set colors for dark background
--f|--font	(bl)   `set font and/or bold font and/or pointsize.
-		       Default:
-		       --font='DejaVuSerif,DejaVuSerif-Bold 12'
-		       Argument examples:
-		       'a,b 12' 'a,b' 'a' 'a 12' 'a, 12' ',b' ',b 12' '12'
-		       The last one (|'12'|) changes the pointsize only.
--N|--nocolor	(t)    do not use color in terminal output
--n|--noarea=ARG	(bl)   in phone numbers, remove area codes with the
-		       value |ARG|, possibly prefixed with 0 (zero)
--r|--return=ARG	(l)    use |ARG| as returnaddres in labels, commas are 
-		       replaced with bullets
--B|--blind	(ltTv) suffix label lines with a dot for visually
-		       handicapped, text-to-voice progs will pause there
-		       Boxes the labels. Creates a nickname in vcards
-		       containing most info. The nickname can easily be
-		       invoked to be read aloud on an iphone. 
+-d,--dark	(t)   do not use color in terminal output
+-f,--font=X	(bl)  set font and/or bold font and/or pointsize.
+		      Default: X='DejaVuSerif,DejaVuSerif-Bold 12'
+		      Argument examples:
+		       'a,b 12' 'a,b' 'a' 'a 12' 'a, 12' ',b' '12'
+		      The last one (|'12'|) changes the pointsize only.
+-N,--nocolor	(t)   set colors for dark background
+-n,--noarea=X	(bl)  in phone numbers, remove area codes with the
+		      value X, possibly prefixed with 0 (zero)
+-r,--return=X	(l)   use X as return addres in labels, commas are 
+		      replaced with bullets
+-B,--blind	(ltT) suffix label lines with a dot for visually
+		      handicapped, text-to-voice progs will pause there
+		      Labels will be boxed to force reading horizontally.
+		      Creates a nickname in vcards containing most
+		      info. The nickname can easily be invoked to be
+		      read aloud on an iphone.
 
 = Description
 contmgr lists your contacts to standard output. If you provide a search
@@ -208,10 +207,10 @@ handle_options() {
 			echo "$Version"
 			exit
 			;;
-      (-i|--input=ARG)  # Take input from file |ARG| with default extension vcf;
-			# if ARG has no path info, the file is suppposed to reside
+      (-i|--input)	# Take input from file X with default extension vcf;
+			# if X has no path info, the file is supposed to reside
 			# in the same directory as the default input file.
-			if [[ $2 =~ / ]]; then # pathinfo given?
+			if [[ $2 =~ / ]]; then # path info given?
 			   Input="$2"
 			else # no path info? then look in default input directory
 			   Input="${Input%/*}/$2"
@@ -219,8 +218,7 @@ handle_options() {
 			Input="${Input%.vcf}.vcf"
 			shift 2
 			;;
-      (-k|--key=ARG)    # selection key; selects records containing
-			# |ARG| in the TITLE field
+      (-k|--key)	# select records containing key X in the TITLE field
 			Key="$2"
 			shift 2
 			;;
@@ -260,16 +258,15 @@ handle_options() {
 			;;
 # Format specific options (b, l, t and T specify relevant formats):
 
-      (-d|--dark)       # (t)  do not use color in terminal output
+      (-d|--dark)       # (t)   do not use color in terminal output
 			dark
 			shift
 			;;
-      (-f|--font)       # (bl) set font and/or bold font and/or pointsize.
-			#      Default:
-			#       --font='DejaVuSerif,DejaVuSerif-Bold 12'
-			#      Argument examples:
-			#	'a,b 12' 'a,b' 'a' 'a 12' 'a, 12' ',b' ',b 12' '12'
-			#      The last one (|'12'|) changes the pointsize only.
+      (-f|--font)       # (bl)  set font and/or bold font and/or pointsize.
+			#       Default: X='DejaVuSerif,DejaVuSerif-Bold 12'
+			#       Argument examples:
+			#        'a,b 12' 'a,b' 'a' 'a 12' 'a, 12' ',b' '12'
+			#       The last one (|'12'|) changes the pointsize only.
 			if [[ $2 =~ ([[:alnum:]_-]*)(,[[:alnum:]_-]*)?( [0-9]+)?$ ]]; then
 			   f=${BASH_REMATCH[1]}
 			   b=${BASH_REMATCH[2]#,}
@@ -284,25 +281,28 @@ handle_options() {
 			fi
 			shift 2
 			;;
-      (-N|--nocolor)    # (t)  set colors for dark background
+      (-N|--nocolor)    # (t)   set colors for dark background
 			nocolor
 			shift
 			;;        
-      (-n|--noarea=ARG) # (bl) in phone numbers, remove area codes with the
-			#      value |ARG|, possibly prefixed with 0 (zero)
+      (-n|--noarea)	# (bl)  in phone numbers, remove area codes with the
+			#       value X, possibly prefixed with 0 (zero)
 			Noarea=${2#0}
 			[[ "${AreaCodes[*]}" =~ $Noarea ]] ||
 			   die "Unrecognized value for --noarea option"
 			shift 2
 			;;
-      (-r|--return=ARG) # (l)  use |ARG| as returnaddres in labels, commas are 
-			#      replaced with bullets
+      (-r|--return)	# (l)   use X as return addres in labels, commas are 
+			#       replaced with bullets
 			Return="${2//,/\\bul }"
 			shift 2
 			;;
       (-B|--blind)      # (ltT) suffix label lines with a dot for visually
-			#      handicapped, text-to-voice progs will pause there
-			# Labels will be boxed to force reading horizontally
+			#       handicapped, text-to-voice progs will pause there
+			#       Labels will be boxed to force reading horizontally.
+                        #       Creates a nickname in vcards containing most
+                        #       info. The nickname can easily be invoked to be
+                        #       read aloud on an iphone.
 			Dot=.
 			Blind=true
 			shift
@@ -740,7 +740,7 @@ description:	print in home and work addresses label format
 DOC
 #-------------------------------------------------------------------------------
 pr_label() {
-   local i j ext street zip city state country area name
+  local i j ext street zip city state country area name
    for i in H W; do
       for j in pobox ext street zip city state country area; do
          eval $j="\$$i$j"
