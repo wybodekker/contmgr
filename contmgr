@@ -168,16 +168,16 @@ handle_options() {
    local options
    options=$(getopt \
       -n "$Myname" \
-      -o bdBf:HhIi:k:lNn:r:sTtvVwx \
-      -l booklet,dark,blind,font:,Help,help,input:,key:,labels,noarea:,nocolor,return:,sorter,tagged,term,vcard,version,word,xml \
+      -o bcdBf:HhIi:k:lNn:r:sTtvVwx \
+      -l booklet,counter,dark,blind,font:,Help,help,input:,key:,labels,noarea: \
+      -l nocolor,return:,sorter,tagged,term,vcard,version,word,xml \
       -- "$@"
    ) || exit 1
    eval set -- "$options"
    
    Key='' Noarea='' Grepopt=-ril Format='term' Return=''
    Fsize=12 Font='DejaVuSerif' Bold='DejaVuSerif-Bold' Input="$HOME/Contacts.vcf"
-   Paperwidth=210 Paperheight=297 Cols=3 Rows=8
-
+   Paperwidth=210 Paperheight=297 Cols=3 Rows=8 counter=false
    Mycode='' Dot='' Blind=false
    Mycountry='Nederland' # this is emptied except in vcard format
    # shellcheck disable=SC2153
@@ -296,6 +296,10 @@ handle_options() {
 			#       replaced with bullets
 			Return="${2//,/\\bul }"
 			shift 2
+			;;
+      (-c|--counter)    # (b)   prefix display name with a counter
+			counter=true
+			shift
 			;;
       (-B|--blind)      # (ltT) suffix label lines with a dot for visually
 			#       handicapped, text-to-voice progs will pause there
@@ -449,7 +453,7 @@ pr_city() {
     (44) # UK
          echo -e "$2\n${1%???}$space${1: -3}" # all but last 3 <space> last 3
 	 ;;
-    (33|41|43|47|49|358|385) # France, Switserland, Austria, Germany, Finland, Croatia
+    (33|34|41|43|47|49|358|385) # France, Switserland, Austria, Germany, Finland, Croatia
          echo "$1 $2" 
 	 ;;
     (32) # Belgium
@@ -850,7 +854,8 @@ pr_booklet() {
    fix Wphone
    Hmail=${Hmail//_/\\_}
    Wmail=${Wmail//_/\\_}
-   echo -n "$g\Red{$name} $Prefix $First"
+   [[ $counter ]] && ((xx+=1))
+   echo -n "$g\Red{$xx $name} $Prefix $First"
    [[ -n $Middle ]] && echo -n " $Middle"
    [[ -n $Nick ]] && echo -n " $Nick"
    [[ -n $Org ]] && [[ ! $name == "$Org" ]] && echo -n " ($Org)"
@@ -1012,8 +1017,9 @@ mobtest() {
    cell=false
    # see areaphonecodes.com for completion: 
    for i in 1[24579][0-8] 13[0-68] 16 18[0-7] 316[1-58] 324[5-9] 336 337[3-9] \
+	    34[67] 349690609 349690610 3497390 \
 	    3526[2679][18] 35265[1568] 35267[189] 352681 393[1-9] 447[45789] \
-            491[567] 599[3-79] 628[1-9]
+            474[015-8] 4759 479 491[567] 599[3-79] 628[1-9]
    do
       if [[ $n =~ ^\+$i ]]; then
          cell=true
@@ -1065,6 +1071,7 @@ s/\\,/,/g		# unescape commas
 s/^END:VCARD/&\n/I	# insert empty line after END:VCARD as a record separator for msort.
 s/\r//g			# remove \r for unix line endings
 s/;TYPE=\(VOICE\|INTERNET\)//gI		# Remove unused types
+s/;VALUE=TEXT//gI			# ditto
 s/;TYPE=IPHONE/;TYPE=CELL/gI		# IPHONE is a CELL phone
 s/;PREF=[0-9]\+//gI			# remove PREF=n
 /^\(REV\|PRODID\|UID\|VERSION\|IMPP\):/Id# remove unused entries
