@@ -1149,9 +1149,9 @@ s/;PREF=[0-9]\+//gI			# remove PREF=n
 /^\(REV\|PRODID\|UID\|VERSION\|IMPP\):/Id# remove unused entries
 /^N:;;;;/d				# remove if empty
 /^ORG:$/d
-/TEL[:;]/Is/[() ~ -]//g			# + and digits only
-/TEL[;:]/Is/:00/:+/			# 00 → +
-/TEL[;:]/Is/:0/:+'"$Mycode"'/		# 0 → +31
+/^TEL[:;]/Is/[() ~ -]//g			# + and digits only
+/^TEL[;:]/Is/:00/:+/			# 00 → +
+/^TEL[;:]/Is/:0/:+'"$Mycode"'/		# 0 → +31
 /TYPE=\(FAX\|PAGER\)/Id			# remove FAX etc. entries
 ' |
 # sort by N and/or ORG, ignore ‘ and ' at start of N-field:
