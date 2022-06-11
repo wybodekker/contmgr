@@ -22,16 +22,17 @@ contmgr [options] [searchkey]
 -i,--input=X	Take input from file X with default extension vcf;
 		if X has no path info, the file is supposed to reside
 		in the same directory as the default input file.
--k,--key=X	select records containing key X in the TITLE field
+-k,--key=X	select records containing key X in the CATEGORIES field
 -w,--word	search key must be a complete word
 
 == Format options:
 
 -b,--booklet	print booklet
--l,--labels	print address labels
+-l,--labels	print tex source for address labels
+-L,--letter	print tex source for letters
 -s,--sorter	print only first line of |--term| format
 -T,--tagged	print tag / value list
--t,--term	print to terminal
+-t,--term	print to terminal (this is the default format)
 -v,--vcard	print vcards
 -x,--xml	print xml for FritzBox
 
@@ -48,6 +49,8 @@ contmgr [options] [searchkey]
 		      value X, possibly prefixed with 0 (zero)
 -r,--return=X	(l)   use X as return addres in labels, commas are 
 		      replaced with bullets
+-c,--counter	(b)   prefix display name in booklet with a counter for
+		      reference
 -B,--blind	(ltT) suffix label lines with a dot for visually
 		      handicapped, text-to-voice progs will pause there
 		      Labels will be boxed to force reading horizontally.
@@ -66,14 +69,14 @@ variable CONTACTS, unless it is given with the |--input| option.
 
 There are some limitations on the data that are read from that
 vcard file. The following table shows the vcard fields that are stored
-and the formats (v=vcard, T=tagged, x=xml, t=terminal, b=booklet, l=label)
+and the formats (v=vcard, T=tagged, x=xml, t=terminal, b=booklet, l=label L=letter)
 in which they are reproduced:
 
-Last	 vTxtbl  N 1
-First	 vTxtbl  N 2
+Last	 vTxtblL N 1
+First	 vTxtblL N 2
 Middle	 vTxtb-  N 3
-Prefix	 vT-tbl  N 4
-Suffix	 vT-tbl  N 5
+Prefix	 vT-tblL N 4
+Suffix	 vT-tblL N 5
 Nick	 vTxtb-  NICKNAME
 Disp	 vT----  FN (unused, reconstructed from above entries)
 Org	 vTxtb-  ORG
@@ -81,25 +84,32 @@ Url	 vT-t--  URL
 Bday	 vT-t--  BDAY
 Hmail	 vTxt--  EMAIL;TYPE=HOME
 Wmail	 vTxt--  EMAIL;TYPE=WORK
-Hpobox	 vT-tbl  ADR;TYPE=HOME 1
-Hext	 vT-tbl  ADR;TYPE=HOME 2
-Hstreet	 vT-tbl  ADR;TYPE=HOME 3
-Hcity	 vT-tbl  ADR;TYPE=HOME 4
-Hstate	 vT-tbl  ADR;TYPE=HOME 5
-Hzip	 vT-tbl  ADR;TYPE=HOME 6
-Hcntry	 vT-tbl  ADR;TYPE=HOME 7
-Wpobox	 vT-tbl  ADR;TYPE=WORK 1
-Wext	 vT-tbl  ADR;TYPE=WORK 2
-Wstreet	 vT-tbl  ADR;TYPE=WORK 3
-Wcity	 vT-tbl  ADR;TYPE=WORK 4
-Wstate	 vT-tbl  ADR;TYPE=WORK 5
-Wzip	 vT-tbl  ADR;TYPE=WORK 6
-Wcntry	 vT-tbl  ADR;TYPE=WORK 7
-Keys	 vT-t--  TITLE
+Hpobox	 vT-tblL ADR;TYPE=HOME 1
+Hext	 vT-tblL ADR;TYPE=HOME 2
+Hstreet	 vT-tblL ADR;TYPE=HOME 3
+Hcity	 vT-tblL ADR;TYPE=HOME 4
+Hstate	 vT-tblL ADR;TYPE=HOME 5
+Hzip	 vT-tblL ADR;TYPE=HOME 6
+Hcntry	 vT-tblL ADR;TYPE=HOME 7
+Wpobox	 vT-tblL ADR;TYPE=WORK 1
+Wext	 vT-tblL ADR;TYPE=WORK 2
+Wstreet	 vT-tblL ADR;TYPE=WORK 3
+Wcity	 vT-tblL ADR;TYPE=WORK 4
+Wstate	 vT-tblL ADR;TYPE=WORK 5
+Wzip	 vT-tblL ADR;TYPE=WORK 6
+W.cntry	 vT-tblL ADR;TYPE=WORK 7
+Keys	 vT-t--  CATEGORIES
 Hphone	 vTxt--  TEL;TYPE=HOME
 Wphone	 vTxt--  TEL;TYPE=WORK
 Mphone	 vTxt--  TEL;TYPE=CELL
 Note	 vT-tb-  NOTE
+
+= Formats
+
+contmgr can print in various formats, specified in the |--format| option.
+Currently, the following formats are available:
+
+==
 
 = Configuration
 The defaults for some variables, like font, fontsize, vcard file, and
@@ -108,7 +118,7 @@ file, either in system file: |$PREFIX/contmgr.conf| or in a user file:
 |$HOME/.contmgr.conf|. These files are read in this order and they can
 contain input such as this:
 
-   Fsize=12
+   Fontsize=12
    Font='DejaVuSerif'
    Bold='DejaVuSerif-Bold'
    Input="$HOME/Contacts.vcf"
@@ -121,8 +131,8 @@ defaults already.
 = Todo
 == Country code
 The vCard format lacks an entry for the country code, needed for formatting
-the zip code and for zip code positioning.n address labels. There is of
-course an entry for the country, but that can by expressed in any language,
+the zip code and for zip code positioning in address labels. There is of
+course an entry for the country, but that can be expressed in any language,
 preferably the local language.
 
 My solution for now is to expect two vcard entries in the vcard file:
@@ -159,7 +169,7 @@ helpall() { sed -n "/^:<<'DOC'$/,/^DOC/p" "$0"|sed '1d;$d'|
 synopsis:	 handle_options "$@"
 description:	handle the options.
 globals used:	 Myname Version AreaCodes
-globals  set:	 Args Noarea Grepopt Format Return Fsize Font Bold Input
+globals  set:	 Args Noarea Grepopt Format Return Fontsize Font Bold Input
 		 Mycountry Key
 returns:	the number of remaining arguments
 DOC
@@ -168,16 +178,16 @@ handle_options() {
    local options
    options=$(getopt \
       -n "$Myname" \
-      -o bcdBf:HhIi:k:lNn:r:sTtvVwx \
-      -l booklet,counter,dark,blind,font:,Help,help,input:,key:,labels,noarea: \
+      -o bcdBf:HhIi:k:lLNn:r:sTtvVwx \
+      -l booklet,counter,dark,blind,font:,Help,help,input:,key:,labels,letter,noarea: \
       -l nocolor,return:,sorter,tagged,term,vcard,version,word,xml \
       -- "$@"
    ) || exit 1
    eval set -- "$options"
    
    Key='' Noarea='' Grepopt=-ril Format='term' Return=''
-   Fsize=12 Font='DejaVuSerif' Bold='DejaVuSerif-Bold' Input="$HOME/Contacts.vcf"
-   Paperwidth=210 Paperheight=297 Cols=3 Rows=8 counter=false
+   Fontsize=12 Font='DejaVuSerif' Bold='DejaVuSerif-Bold' Input="$HOME/Contacts.vcf"
+   Paperwidth=210 Paperheight=297 Cols=3 Rows=8 counter=false count=''
    Mycode='' Dot='' Blind=false
    Mycountry='Nederland' # this is emptied except in vcard format
    # shellcheck disable=SC2153
@@ -218,7 +228,7 @@ handle_options() {
 			Input="${Input%.vcf}.vcf"
 			shift 2
 			;;
-      (-k|--key)	# select records containing key X in the TITLE field
+      (-k|--key)	# select records containing key X in the CATEGORIES field
 			Key="$2"
 			shift 2
 			;;
@@ -232,8 +242,12 @@ handle_options() {
 			Format=booklet
 			shift
 			;;
-      (-l|--labels)     # print address labels
+      (-l|--labels)     # print tex source for address labels
 			Format=labels
+			shift
+			;;
+      (-L|--letter)	# print tex source for letters
+			Format=letter
 			shift
 			;;
       (-s|--sorter)     # print only first line of |--term| format
@@ -244,7 +258,7 @@ handle_options() {
 			Format=tagged
 			shift
 			;;
-      (-t|--term)       # print to terminal
+      (-t|--term)       # print to terminal (this is the default format)
 			Format=term
 			shift
 			;;
@@ -272,11 +286,11 @@ handle_options() {
 			   b=${BASH_REMATCH[2]#,}
 			   s=${BASH_REMATCH[3]# }
 			  if [[ $f =~ ^[[:digit:]]+ ]]; then
-			     Fsize="$f"
+			     Fontsize="$f"
 			  else
 			     [[ -n $f ]] && Font="$f"
 			     [[ -n $b ]] && Bold="$b"
-			     [[ -n $s ]] && Fsize="$s"
+			     [[ -n $s ]] && Fontsize="$s"
 			  fi
 			fi
 			shift 2
@@ -344,6 +358,7 @@ description:	set colors for light background
 DOC
 #-------------------------------------------------------------------------------
 light() {
+   RED='\e[1;38;5;9m'
    Red='\e[38;5;1m'
    Mag='\e[38;5;5m'
    Nor='\e[0m'
@@ -358,6 +373,7 @@ DOC
 #-------------------------------------------------------------------------------
 dark() {
    Red='\e[1;38;5;9m'
+   RED='\e[38;5;1m'
    Mag='\e[1;38;5;13m'
    Nor='\e[0m'
    Yel='\e[1;38;5;11m'
@@ -575,7 +591,7 @@ description:	print only first line of terminal format
 DOC
 #-------------------------------------------------------------------------------
 pr_sorter() {
-   printf "%b %b %b %b\n" "$Disp" "$Bday" "$(pr_age)" "$Keys"
+   printf "%b %b %b %b\n" "$Disp" "$Bday" "$(pr_age)" "${Keys[*]}"
 }
 
 :<<'DOC' #---------------------------------------------------------------------
@@ -602,7 +618,7 @@ pr_tagged() {
       "Organisatie:	$Org"
       "Bijnaam:		$Nick"
       "Geboortedatum:	$Bday"
-      "Marker;		$Keys"
+      "Marker;		${Keys[*]}"
       "Mobiel:		$Mphone"
       "Gegevens thuis:	$home"
       "Adres:		$Hpobox $Hstreet $hc ${Hcountry%$Mycountry}"
@@ -667,7 +683,7 @@ pr_term() {
    hc=$(pr_city "$Hzip" "$Hcity" "$Hstate" "$Harea")
    wc=$(pr_city "$Wzip" "$Wcity" "$Wstate" "$Warea")
    echo -e "$Nor———————————————————————————————————————————————————————————"
-   printf "$Yel%-44s%-10s %-5s %s$Nor\n" "$Disp" "$Bday" "$(pr_age)" "$Keys"
+   printf "$Yel%-44s%-10s %-5s$Nor\n" "$Disp" "$Bday" "$(pr_age)"
    [[ -n "$Hpobox$Wpobox" ]] && printf "%-30s%-30s\n" "$Hpobox" "$Wpobox"
    [[ -n "$Hext$Wext" ]] && printf "%-30s%-30s\n" "$Hext" "$Wext"
    [[ -n "$Hstreet$Wstreet" ]] && printf "%-30s%-30s\n" "$Hstreet" "$Wstreet"
@@ -682,6 +698,7 @@ pr_term() {
       printf "%-20s$Mag%-20s$Nor%-20s\n" "$Hphone" "$Mphone" "$Wphone"
    [[ -n "$Hmail$Wmail" ]] && printf "$Blu%-27s%27s$Nor\n" "$Hmail" "$Wmail"
    [[ -n $Note ]] && echo -e "${Note%'\n'}" |fmt -60
+   (( ${#Keys[@]} > 0 )) && printf "${RED}tags:$Nor %s\n" "${Keys[*]}"
 }
 
 :<<'DOC' #---------------------------------------------------------------------
@@ -719,8 +736,32 @@ pr_startlabels() { local awa=''
 	}
 	\def\C{$awa}
 	\begin{document}
-	\fontsize{$Fsize}{$((Fsize+2))}\selectfont
+	\fontsize{$Fontsize}{$((Fontsize+2))}\selectfont
 	\begin{labels}
+	EOD
+}
+
+:<<'DOC' #---------------------------------------------------------------------
+= pr_startletter
+description:	print preamble for letter
+DOC
+#-------------------------------------------------------------------------------
+pr_startletter() { local awa=''
+   [[ -n $Return ]] && awa='\awa'
+   cat <<-EOD
+	%!lualatex
+	\documentclass[12pt]{isodoc}
+	\usepackage{$LetterStyle}                                                              
+	\setupdocument{
+	    ourref = {${LetterReference:-===reference===}},
+	      date = {${LetterDate:-today}},
+	   subject = {${LetterSubject:-===subject===}},
+	}
+	\def\Letter{\letter{%
+	${LetterContent:-===Letter content===}
+	}}
+	\def\cleardoublepage{}
+	\begin{document}
 	EOD
 }
 
@@ -770,6 +811,36 @@ pr_label() {
 }
 
 :<<'DOC' #---------------------------------------------------------------------
+= pr_letter
+description:	print in home and work addresses letter format
+DOC
+#-------------------------------------------------------------------------------
+pr_letter() {
+  local i j ext street zip city state country area name
+   for i in H W; do
+      for j in pobox ext street zip city state country area; do
+         eval $j="\$$i$j"
+      done
+      [[ -n $ext ]] && street="$ext\n$street"
+      [[ -n $street$pobox ]] || continue
+      street=${street//#/\\#}
+      street=${street//_/\\_}
+      name="$Prefix $First $Last $Middle $Suffix"
+      trim name
+      printf '\setupdocument{to={%%\n'
+      [[ -n $Org ]] && printf '\t%s\\\\\n' "$Org"
+      [[ -n $name ]] && printf '\t%s\\\\\n' "$name"
+      [[ -n $pobox ]] && printf '\t%s\\\\\n' "$pobox"
+      [[ -n $street ]] && printf '\t%s\\\\\n' "$street"
+      printf '\t'
+      pr_city "$zip" "$city" "$state" "$area" 
+      [[ $country == "$Mycountry" ]] || printf '\t%s\n' "$country"
+      printf '\t}, opening={Geachte %s %s}\n' "$Prefix" "$Last"
+      printf '}\Letter\n'
+   done 
+}
+
+:<<'DOC' #---------------------------------------------------------------------
 = pr_startbooklet
 description:	print preamble for booklet format
 DOC
@@ -806,7 +877,7 @@ pr_startbooklet() {
 	\setlength{\extrarowheight}{1ex}
 	\def\G{\rowcolor[gray]{.8}}
 	\begin{document}%\renewcommand{\arraystretch}{.8}
-	\fontsize{$Fsize}{$((Fsize+2))}\selectfont
+	\fontsize{$Fontsize}{$((Fontsize+2))}\selectfont
 	\begin{longtable}{L{52}L{68}R{36}}
 	  \multicolumn{3}{@{}l@{}}{\Large\bfseries Adreslijst $name
 	  \hfill\today}\tabularnewline
@@ -821,6 +892,7 @@ description:	print in booklet format
 DOC
 #-------------------------------------------------------------------------------
 pr_booklet() {
+   $counter && ((count+=1))
    ((gray=!gray))
    local G=('\G' '  ') g=${G[$gray]}
    local adr='' name="$Last $Suffix"
@@ -854,8 +926,7 @@ pr_booklet() {
    fix Wphone
    Hmail=${Hmail//_/\\_}
    Wmail=${Wmail//_/\\_}
-   [[ $counter ]] && ((xx+=1))
-   echo -n "$g\Red{$xx $name} $Prefix $First"
+   echo -n "$g\Red{$count $name} $Prefix $First"
    [[ -n $Middle ]] && echo -n " $Middle"
    [[ -n $Nick ]] && echo -n " $Nick"
    [[ -n $Org ]] && [[ ! $name == "$Org" ]] && echo -n " ($Org)"
@@ -957,7 +1028,7 @@ pr_vcard() {
       shift
    done
    [[ -n $Url ]] && echo "URL:$Url"
-   [[ -n $Keys ]] && echo "TITLE:$Keys"
+   [[ -n $Keys ]] && echo "CATEGORIES:${Keys[*]}"
    # do this at the end, in case pr_oneliner changes the phone nrs:
    $Blind && echo "NICKNAME:$(pr_oneliner)"
    echo -e 'END:VCARD\n'
@@ -1054,6 +1125,7 @@ cd "$tmp" || die "Could not cd to $tmp"
 
 case $Format in
 (labels)  pr_startlabels;;
+(letter)  pr_startletter;;
 (booklet) pr_startbooklet;;
 (xml)     pr_startxml;;
 (vcard)   ;;
@@ -1097,12 +1169,12 @@ find . -type f -name 'x*' -print0 |
 xargs --null grep $Grepopt "$searchkey" |
 sort |
 while read -r file; do
-   unset Keys Bday Disp First \
+   unset Bday Disp First \
 	 Hcity Hcountry Hext Hmail Hphone Hpobox Hstate Hstreet Hzip \
 	 Last Middle Mphone Nick Note Org Prefix Suffix Url \
 	 Wcity Wcountry Wext Wmail Wphone Wpobox Wstate Wstreet Wzip \
 	 ahome awork ehome ework pcell phome pwork
-   Harea='' Warea=''
+   Harea='' Warea='' Keys=()
    while IFS= read -r line; do
       Type=''
       if [[ $line =~ TYPE=([[:alpha:]]*) ]]; then
@@ -1176,8 +1248,8 @@ while read -r file; do
          Harea=${BASH_REMATCH[1]}
       elif [[ $line =~ ^X-CCODE-WORK:(.*) ]]; then
          Warea=${BASH_REMATCH[1]}
-      elif [[ $line =~ ^TITLE:(.*)$ ]]; then
-         Keys=${BASH_REMATCH[1]}
+      elif [[ $line =~ ^CATEGORIES:(.*)$ ]]; then
+         IFS=, read -ra Keys <<<"${BASH_REMATCH[1]}"
       elif [[ $line =~ ^TEL:(.*) ]]; then
          v="${BASH_REMATCH[1]}"
          if [[ ! $v =~ ^(11|14|\+)[0-9]+$ ]]; then
@@ -1212,7 +1284,7 @@ while read -r file; do
 
    # If a key was specified, print only if the record has that key.
    # No key specified, just print.
-   [[ -n $Key ]] && [[ ! $Keys == "$Key" ]] && continue
+   [[ -n $Key ]] && [[ ! ${Keys[*]} =~ "$Key" ]] && continue
 
    # Check if phone numbers are cell/not cell as expected
    mobtest "Hphone" home false
@@ -1221,6 +1293,7 @@ while read -r file; do
 
    case $Format in
    (labels)  pr_label;;
+   (letter)  pr_letter;;
    (booklet) pr_booklet;;
    (xml)     pr_xml;;
    (term)    if $Blind; then pr_oneliner; else pr_term; fi;;
@@ -1231,6 +1304,7 @@ while read -r file; do
 done
 case $Format in
 (labels)  echo '\end{labels}\end{document}';;
+(letter)  echo '\end{document}';;
 (term)    ;;
 (sorter)  ;;
 (vcard)   ;;
