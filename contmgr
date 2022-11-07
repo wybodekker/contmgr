@@ -1099,9 +1099,9 @@ mobtest() {
    done
    if [[ $cell != "$3" ]]; then
       if $cell; then 
-         Warn "$2 phone $n looks like a mobile number"
+         Warn "$Disp: $2 phone $n looks like a mobile number"
       else
-         Warn "$2 phone $n does not look like a mobile number"
+         Warn "$Disp: $2 phone $n does not look like a mobile number"
       fi
    fi
 }
@@ -1137,6 +1137,8 @@ esac
 # join lines starting with space (=continuation lines) with previous line
 sed 'N;s/;waid=[0-9]\+//;s/\r//g;s/\n //g;P;D' "$Input" |
 sed '
+s/,UNKNOWN//gI
+s/UNKNOWN,//gI
 /^ITEM[0-9]\..*/Is/ITEM[0-9]\.//I	# remove ITEMs
 s/\\,/,/g		# unescape commas
 /^$/d			# remove empty lines
@@ -1145,6 +1147,9 @@ s/\r//g			# remove \r for unix line endings
 s/;TYPE=\(VOICE\|INTERNET\)//gI		# Remove unused types
 s/;VALUE=TEXT//gI			# ditto
 s/;TYPE=IPHONE/;TYPE=CELL/gI		# IPHONE is a CELL phone
+s/;TYPE=MOBILE/;TYPE=CELL/gI		# MOBILE is a CELL phone
+s/;TYPE=PREF//gI			# remove TYPE=PREF
+s/;PREF=TRUE//gI
 s/;PREF=[0-9]\+//gI			# remove PREF=n
 /^\(REV\|PRODID\|UID\|VERSION\|IMPP\):/Id# remove unused entries
 /^N:;;;;/d				# remove if empty
