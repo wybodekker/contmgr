@@ -1,7 +1,7 @@
 #!/bin/bash
 
 Myname="${0##*/}"
-Version=2.05
+Version=2.06
 
 # To do:
 # Option running  ~/Contacts/sortcont ?
@@ -90,19 +90,31 @@ Hstreet	 vT-tblL ADR;TYPE=HOME 3
 Hcity	 vT-tblL ADR;TYPE=HOME 4
 Hstate	 vT-tblL ADR;TYPE=HOME 5
 Hzip	 vT-tblL ADR;TYPE=HOME 6
-Hcntry	 vT-tblL ADR;TYPE=HOME 7
+Hccode	 vT-tblL ADR;TYPE=HOME 7
 Wpobox	 vT-tblL ADR;TYPE=WORK 1
 Wext	 vT-tblL ADR;TYPE=WORK 2
 Wstreet	 vT-tblL ADR;TYPE=WORK 3
 Wcity	 vT-tblL ADR;TYPE=WORK 4
 Wstate	 vT-tblL ADR;TYPE=WORK 5
 Wzip	 vT-tblL ADR;TYPE=WORK 6
-W.cntry	 vT-tblL ADR;TYPE=WORK 7
+Wccode	 vT-tblL ADR;TYPE=WORK 7
 Keys	 vT-t--  CATEGORIES
 Hphone	 vTxt--  TEL;TYPE=HOME
 Wphone	 vTxt--  TEL;TYPE=WORK
 Mphone	 vTxt--  TEL;TYPE=CELL
 Note	 vT-tb-  NOTE
+
+Note that the last (7th) field of the ADR entry is supposed to be a country
+code, like NL for The Netherlands. Vcard exports of most applications tend
+to put the name of the country here, in the language set in that
+application. contmgr tries to replace such names with the corresponding
+country code, using the information in the |CCodes| associative array. When
+a country name has to be written, in an address label for example, this
+country code is used to find, in |CCodes|, the country name in the language
+of the user, |Mylanguage|, as defined in the user configuration file.
+
+Currently, country names are defined in |CCodes| in 6 languages: EN, FR,
+ES, IT, and NL.
 
 = Formats
 
@@ -113,17 +125,22 @@ Currently, the following formats are available:
 
 = Configuration
 The defaults for some variables, like font, fontsize, vcard file, and
-country may be inconvenient. You can set your own defaults in a config
-file, either in system file: |$PREFIX/contmgr.conf| or in a user file:
-|$HOME/.contmgr.conf|. These files are read in this order and they can
-contain input such as this:
+country code, may be inconvenient. You can set your own defaults in a
+configuration file, either in system file: |$PREFIX/contmgr.conf| or in a
+user file: |$HOME/.contmgr.conf|.
+These files are read in this order and they can contain input such as this:
 
    Fontsize=12
    Font='DejaVuSerif'
    Bold='DejaVuSerif-Bold'
    Input="$HOME/Contacts.vcf"
-   Mycountry='Nederland'
-   Mycode=31
+   Myccode=NL
+   Mylanguage=NL
+   Cols=3
+   Rows=8
+   Paperwidth=210
+   Paperheight=297
+   LetterStyle=iso
 
 The content shown here would have no effect, as its values are the
 defaults already.
@@ -137,7 +154,7 @@ preferably the local language.
 
 My solution for now is to expect two vcard entries in the vcard file:
 |X-CCODE-HOME| and |X-CCode-WORK|, which set the country codes for home
-and work addresses. By default, the users own country code |Mycode|, as set
+and work addresses. By default, the users own country code |Myccode|, as set
 in the configuration file, is used. So normally, these entries are needed
 only for foreign addresses.
 
@@ -145,7 +162,7 @@ only for foreign addresses.
 I suppose phonenumbers to have the format |+can|, where |c| is 1-3
 country code digits, a is 1-3 area code digits and n is 1 or more phone
 number digits.
-If the |c|'s match the value of |Mycode| (say xx), this is converted to
+If the |c|'s match the value of |Myccode| (say xx), this is converted to
 |0xx an|; if not, to |00xx an|. After this, I match the |a|'s with an array
 |AreaCodes| and I use the match (say yyy) to convert to |00xx yyy n|.
 Finally, the |n|'s are spaced, depending on the number of |n|'s.
@@ -158,8 +175,8 @@ Problem: the |AreaCodes| array is valid for the Netherlands only.
 Released under the [GNU General Public License](www.gnu.org/copyleft/gpl.html)
 DOC
 
-    die() { local i; for i; do echo -e "$Myname: $Red$i$Nor"; done 1>&2; exit 1; }
-   Warn() { local i; for i; do echo -e "$Myname: $Mag$i$Nor"; done 1>&2; }
+    die() { local i; for i; do echo -e "$Myname: $Red$dn: $i$Nor"; done 1>&2; exit 1; }
+   Warn() { local i; for i; do displayname>/dev/null; echo -e "$Myname: $Mag$dn$i$Nor"; done 1>&2; }
 helpsrt() { sed -n '/^= Synopsis/,/^= /p' "$0"|sed '1d;$d'; exit; }
 helpall() { sed -n "/^:<<'DOC'$/,/^DOC/p" "$0"|sed '1d;$d'|
             less -P"$Myname-${Version/./·} (press h for help, q to quit)";exit; }
@@ -187,9 +204,8 @@ handle_options() {
    
    Key='' Noarea='' Grepopt=-ril Format='term' Return=''
    Fontsize=12 Font='DejaVuSerif' Bold='DejaVuSerif-Bold' Input="$HOME/Contacts.vcf"
-   Paperwidth=210 Paperheight=297 Cols=3 Rows=8 counter=false count=''
-   Mycode='' Dot='' Blind=false
-   Mycountry='Nederland' # this is emptied except in vcard format
+   Paperwidth=210 Paperheight=297 Cols=3 Rows=8 LetterStyle='iso'
+   counter=false count='' Myccode='' Dot='' Blind=false
    # shellcheck disable=SC2153
    if [[ -n $PREFIX ]]; then
       if [[ -e $PREFIX/contmgr.conf ]]; then
@@ -201,7 +217,8 @@ handle_options() {
    fi
    # shellcheck disable=SC1091
    [[ -e $HOME/.contmgr.conf ]] && source "$HOME/.contmgr.conf"
-   [[ -n $Mycode ]] || Warn "You did not set Mycode in any configuration file"
+   [[ -n $Myccode ]] || Warn "You did not set Myccode in any configuration file"
+   [[ -n $Mylanguage ]] || Warn "You did not set Mylanguage in any configuration file"
    
    while true; do
       case $1 in
@@ -441,48 +458,51 @@ pr_age() {
 
 :<<'DOC' #---------------------------------------------------------------------
 = pr_city
-synopsis:	 pr_city zip city state areacode [Blind]
+synopsis:	 pr_city zip city state countrycode [Blind]
 description:	Try to format city, state and zip
 		if rules not known, print "city, state, zip"
-		 pr_city 4158CH Deil '' → 4158 CH Deil
-		 pr_city 94595 'Walnut Creek' CA 1 → Walnut Creek CA 94595
-		If there is a 5th argument and it is true, zip codes are printed without 
-		spaces: this is useful for blind people, because spaces cause
-		pronunciation problems for speaking programs.
+		 pr_city 4158CH Deil NL → 4158 CH Deil
+		 pr_city 94595 'Walnut Creek' CA US → Walnut Creek CA 94595
+		If there is a 5th argument and it is true, zip codes are
+		printed without spaces: this is useful for blind people,
+		because spaces cause pronunciation problems for speaking
+		programs.
 DOC
 #-------------------------------------------------------------------------------
 pr_city() {
    local ccode
    [[ -z $2 ]] && return # no city = no address
    if [[ -z $4 ]]; then 
-      Warn "Missing country code for $1 $2; using $Mycode"
-      ccode=$Mycode
+      Warn "Missing country code for $1 $2; using $Myccode"
+      ccode=$Myccode
    else
       ccode=$4
    fi
    space=' '
    [[ -n $5 ]] && $5 && space=''
    case "$ccode" in
-   (352) # Luxemburg
+    (LU) # Luxemburg
          echo "L-${1//[L-]/} $2" # L-1234
 	 ;;
-    (44) # UK
+    (GB) # UK
          echo -e "$2\n${1%???}$space${1: -3}" # all but last 3 <space> last 3
 	 ;;
-    (33|34|41|43|47|49|358|385) # France, Switserland, Austria, Germany, Finland, Croatia
+    (FR|ES|CH|AT|NO|DR|FI|HR|MC) # France, Spain, Switserland, Austria, ...
          echo "$1 $2" 
 	 ;;
-    (32) # Belgium
+    (BE) # Belgium
          echo "B-${1//[B-]/} $2" # B-1234
 	 ;;
-    (31) # Netherlands
+    (NL) # Netherlands
          echo "${1:0:4}$space${1:4:2} $2" # first 4 <space> last 2
 	 ;;
-     (1) # USA
+    (IT) # Italy:
+         echo "$1 $2 $3"
+	 ;;
+    (US) # USA
          echo "$2 ${1:0:2}$space${1:2:5}"
 	 ;;
-     (*) Warn "country code $ccode not expected" \
-              "please add new entry to my pr_city function"
+     (*) Warn "Please add $ccode to my pr_city function"
 	 ;;
    esac
 }
@@ -490,7 +510,7 @@ pr_city() {
 :<<'DOC' #---------------------------------------------------------------------
 = fix
 synopsis:	 fix phonenumber
-description:	replace any |Mycode| with 0 and insert spaces in phone number;
+description:	replace any |Myccode| with 0 and insert spaces in phone number;
 		argument is name of the number; for The Netherlands (31):
 		 Hphone=+31630333955
 		 fix Hphone && echo $Hphone # → 06 3033 3955
@@ -501,7 +521,7 @@ fix() {
    local area i n p v
    eval "p=\$$1"
    [[ -z $p ]] && return 1
-   p=${p/+$Mycode/0}
+   p=${p/+$Myccode/0}
    p=${p/+/00}
    case $p in
    ('') eval "$1=''"
@@ -565,6 +585,7 @@ displayname() {
    dn="${dn% }"
    [[ $dn =~ ^\((.*)\)$ ]] && dn=${BASH_REMATCH[1]}
    echo "${dn:-—no name—}"
+   [[ -n $dn ]] && dn="$dn: "
 }
 
 :<<'DOC' #---------------------------------------------------------------------
@@ -600,8 +621,8 @@ description:	print in tag:value format
 DOC
 #-------------------------------------------------------------------------------
 pr_tagged() {
-   hc=$(pr_city "$Hzip" "$Hcity" "$Hstate" "$Harea")
-   wc=$(pr_city "$Wzip" "$Wcity" "$Wstate" "$Warea")
+   hc=$(pr_city "$Hzip" "$Hcity" "$Hstate" "$Hcountry")
+   wc=$(pr_city "$Wzip" "$Wcity" "$Wstate" "$Wcountry")
    dn="$Prefix $First $Middle $Last $Suffix"
    home=''
    work=''
@@ -621,11 +642,11 @@ pr_tagged() {
       "Marker;		${Keys[*]}"
       "Mobiel:		$Mphone"
       "Gegevens thuis:	$home"
-      "Adres:		$Hpobox $Hstreet $hc ${Hcountry%$Mycountry}"
+      "Adres:		$Hpobox $Hstreet $hc $Hcountry"
       "Telefoon:	$Hphone"
       "E-mail:		$Hmail"
       "Gegevens werk:	$work"
-      "Adres:		$Wpobox $Wstreet $wc ${Wcountry%$Mycountry}"
+      "Adres:		$Wpobox $Wstreet $wc Wcountry"
       "Telefoon:	$Wphone"
       "E-mail:		$Wmail"
       "Notitie:		$Note"
@@ -653,10 +674,10 @@ description:	print in oneliner terminal format
 DOC
 #-------------------------------------------------------------------------------
 pr_oneliner() {
-   hc=$(pr_city "$Hzip" "$Hcity" "$Hstate" "$Harea" $Blind)
-   wc=$(pr_city "$Wzip" "$Wcity" "$Wstate" "$Warea" $Blind)
-   h="$Hpobox, $Hext, $Hstreet, $hc, ${Hcountry%$Mycountry}"
-   w="$Wpobox, $Wext, $Wstreet, $wc, ${Wcountry%$Mycountry}"
+   hc=$(pr_city "$Hzip" "$Hcity" "$Hstate" "$Hcountry" $Blind)
+   wc=$(pr_city "$Wzip" "$Wcity" "$Wstate" "$Wcountry" $Blind)
+   h="$Hpobox, $Hext, $Hstreet, $hc, Hcountry"
+   w="$Wpobox, $Wext, $Wstreet, $wc, Wcountry"
    h=$(sed 's/\\n/, /g;s/\(, \)\+/, /g;s/^, //;s/, $//' <<<"$h")
    w=$(sed 's/\\n/, /g;s/\(, \)\+/, /g;s/^, //;s/, $//' <<<"$w")
    ( sed 's/\(, \)\+$/, /g' <<<"$Disp, $Bday, $(pr_age)"
@@ -680,17 +701,15 @@ description:	print in terminal format
 DOC
 #-------------------------------------------------------------------------------
 pr_term() {
-   hc=$(pr_city "$Hzip" "$Hcity" "$Hstate" "$Harea")
-   wc=$(pr_city "$Wzip" "$Wcity" "$Wstate" "$Warea")
+   hc=$(pr_city "$Hzip" "$Hcity" "$Hstate" "$Hccode")
+   wc=$(pr_city "$Wzip" "$Wcity" "$Wstate" "$Wccode")
    echo -e "$Nor———————————————————————————————————————————————————————————"
    printf "$Yel%-44s%-10s %-5s$Nor\n" "$Disp" "$Bday" "$(pr_age)"
    [[ -n "$Hpobox$Wpobox" ]] && printf "%-30s%-30s\n" "$Hpobox" "$Wpobox"
    [[ -n "$Hext$Wext" ]] && printf "%-30s%-30s\n" "$Hext" "$Wext"
    [[ -n "$Hstreet$Wstreet" ]] && printf "%-30s%-30s\n" "$Hstreet" "$Wstreet"
    [[ -n "$hc$wc" ]] && printf "%-30s%-30s\n" "$hc" "$wc"
-   h="${Hcountry%$Mycountry}"
-   w="${Wcountry%$Mycountry}"
-   [[ -n "$h$w" ]] && printf "%-30s%-30s\n" "$Hcountry" "$Wcountry"
+   [[ -n "$Hcountry$Wcountry" ]] && printf "%-30s%-30s\n" "$Hcountry" "$Wcountry"
    fix Hphone
    fix Mphone
    fix Wphone
@@ -785,7 +804,7 @@ description:	print in home and work addresses label format
 DOC
 #-------------------------------------------------------------------------------
 pr_label() {
-  local i j ext street zip city state country area name
+  local i j ext street zip city state country area name pobox
    for i in H W; do
       for j in pobox ext street zip city state country area; do
          eval $j="\$$i$j"
@@ -802,7 +821,7 @@ pr_label() {
       [[ -n $pobox ]] && echo -e "$pobox"
       [[ -n $street ]] && echo -e "${street//\\n/\\n}"
       pr_city "$zip" "$city" "$state" "$area" ""
-      [[ $country == "$Mycountry" ]] || echo "$country"
+      [[ $country == "$Mycountry" ]] || echo "${Cname[$country]}"
       echo
    done |
    sed "s/\. /.~/g
@@ -816,9 +835,9 @@ description:	print in home and work addresses letter format
 DOC
 #-------------------------------------------------------------------------------
 pr_letter() {
-  local i j ext street zip city state country area name
+  local i j ext street zip city state ccode area name pobox
    for i in H W; do
-      for j in pobox ext street zip city state country area; do
+      for j in pobox ext street zip city state ccode area; do
          eval $j="\$$i$j"
       done
       [[ -n $ext ]] && street="$ext\n$street"
@@ -834,7 +853,7 @@ pr_letter() {
       [[ -n $street ]] && printf '\t%s\\\\\n' "$street"
       printf '\t'
       pr_city "$zip" "$city" "$state" "$area" 
-      [[ $country == "$Mycountry" ]] || printf '\t%s\n' "$country"
+      [[ $ccode == "$Myccode" ]] || printf '\t%s\n' "${Cname[$ccode]}"
       printf '\t}, opening={Geachte %s %s}\n' "$Prefix" "$Last"
       printf '}\Letter\n'
    done 
@@ -899,9 +918,9 @@ pr_booklet() {
    [[ -z $name ]] && name="$Org"
    texescape name
    texescape Org
-   local i j street zip city state country
+   local i j street zip city state ccode
    for i in H W; do
-      for j in pobox ext street zip city state country area; do
+      for j in pobox ext street zip city state ccode area; do
          eval $j="\$$i$j"
       done
       # create an address only if there is a street or a PO box:
@@ -911,7 +930,7 @@ pr_booklet() {
              "$ext" \
              "$street" \
              "$(pr_city "$zip" "$city" "$state" "$area")" \
-             "${country%$Mycountry}" "|"
+             "${Cname[${ccode%$Myccode}]}" "|"
          )"
       fi
    done
@@ -1001,11 +1020,11 @@ pr_vcard() {
    local h w i hmw typarr
    declare -A typarr=([H]=HOME [M]=CELL [W]=WORK)
    echo -e "BEGIN:VCARD\nVERSION:3.0"
-   h="ADR;TYPE=HOME:$Hpobox;$Hext;$Hstreet;$Hcity;$Hstate;${Hzip// /};$Hcountry"
-   w="ADR;TYPE=WORK:$Wpobox;$Wext;$Wstreet;$Wcity;$Wstate;${Wzip// /};$Wcountry"
+   h="ADR;TYPE=HOME:$Hpobox;$Hext;$Hstreet;$Hcity;$Hstate;${Hzip// /};$Hccode"
+   w="ADR;TYPE=WORK:$Wpobox;$Wext;$Wstreet;$Wcity;$Wstate;${Wzip// /};$Wccode"
    for i in "$h" "$w"; do
       if [[ ! $i =~ \;\;\;\;\;\;$ ]]; then
-         [[ $i =~ \;$ ]] && i+="$Mycountry"
+         [[ $i =~ \;$ ]] && i+="$Myccode"
          echo "$i"
       fi
    done
@@ -1017,8 +1036,6 @@ pr_vcard() {
    [[ -n $Nick  ]] && ! $Blind && echo "NICKNAME:${Nick:1:-1}"
    [[ -n $Note  ]] && echo "NOTE:$Note"
    [[ -n $Org   ]] && echo "ORG:$Org"
-   [[ -n $Harea ]] && echo "X-CCODE-HOME:$Harea"
-   [[ -n $Warea ]] && echo "X-CCODE-WORK:$Warea"
    set -- HOME CELL WORK
    for hmw in H M W; do
       eval "i=\$${hmw}phone"
@@ -1028,7 +1045,12 @@ pr_vcard() {
       shift
    done
    [[ -n $Url ]] && echo "URL:$Url"
-   [[ -n $Keys ]] && echo "CATEGORIES:${Keys[*]}"
+   if [[ -n $Keys ]]; then
+      k="${Keys[*]}"
+      k="${k// /,}"
+      echo -e "CATEGORIES:$k\nTITLE:$k"
+   fi
+   # (TITLE makes categories searchable in iCloud)
    # do this at the end, in case pr_oneliner changes the phone nrs:
    $Blind && echo "NICKNAME:$(pr_oneliner)"
    echo -e 'END:VCARD\n'
@@ -1059,16 +1081,368 @@ filltype() {
 
 # this works for dutch users only...
 AreaCodes=(
-   6 10 13 15 20 23 24 26 30 33 35 36 38 40 43 45 46 50 53 55 58 70 71 72
-   73 74 75 76 77 78 79 85 87 88 101 111 113 114 115 117 118 161 162 164
-   165 166 167 168 172 174 180 181 182 183 184 186 187 222 223 224 226 227
-   228 229 251 252 255 294 297 299 313 314 315 316 317 318 320 321 341 342
-   343 344 345 346 347 348 411 412 413 416 418 475 478 481 485 486 487 488
-   492 493 495 497 499 511 512 513 514 515 516 517 518 519 521 522 523 524
-   525 527 528 529 541 543 544 545 546 547 548 561 562 566 570 571 572 573
-   575 577 578 591 592 593 594 595 596 597 598 599 800 900 032 033 034 039
-   044 049 061 062 064 0352 0385 0599 01
+   6    10   13   15   20   23   24   26   30   33   35   36   38   40  
+   43   45   46   50   53   55   58   70   71   72   73   74   75   76  
+   77   78   79   85   87   88   101  111  113  114  115  117  118  161 
+   162  164  165  166  167  168  172  174  180  181  182  183  184  186 
+   187  222  223  224  226  227  228  229  251  252  255  294  297  299 
+   313  314  315  316  317  318  320  321  341  342  343  344  345  346 
+   347  348  411  412  413  416  418  475  478  481  485  486  487  488 
+   492  493  495  497  499  511  512  513  514  515  516  517  518  519 
+   521  522  523  524  525  527  528  529  541  543  544  545  546  547 
+   548  561  562  566  570  571  572  573  575  577  578  591  592  593 
+   594  595  596  597  598  599  800  900  032  033  034  039  044  049 
+   061  062  064  0352 0385 0599 01                                     
 )
+
+declare -A acodes=(
+  [AD]=376  [CD]=242  [FR]=33   [IT]=39   [MM]=95   [PM]=508  [TD]=235 
+  [AE]=971  [CF]=236  [GA]=241  [JE]=44   [MN]=976  [PN]=64   [TF]=-   
+  [AF]=93   [CG]=243  [GB]=44   [JO]=962  [MO]=853  [PS]=970  [TG]=228 
+  [AL]=355  [CH]=41   [GE]=995  [JP]=81   [MQ]=596  [PT]=351  [TH]=66  
+  [AM]=374  [CI]=225  [GF]=594  [KE]=254  [MR]=222  [PW]=680  [TJ]=992 
+  [AO]=244  [CK]=682  [GG]=44   [KG]=996  [MT]=356  [PY]=595  [TK]=690 
+  [AQ]=6721 [CL]=56   [GH]=233  [KH]=855  [MU]=230  [QA]=974  [TL]=670 
+  [AR]=54   [CM]=237  [GI]=350  [KI]=686  [MV]=960  [RE]=262  [TM]=993 
+  [AT]=43   [CN]=86   [GL]=299  [KM]=269  [MW]=265  [RO]=40   [TN]=216 
+  [AU]=61   [CO]=57   [GM]=220  [KP]=850  [MX]=52   [RS]=381  [TO]=676 
+  [AW]=297  [CR]=506  [GN]=224  [KR]=82   [MY]=60   [RU]=7    [TR]=90  
+  [AZ]=994  [CU]=53   [GP]=590  [KW]=965  [MZ]=258  [RW]=250  [TV]=688 
+  [BA]=387  [CV]=238  [GQ]=240  [KZ]=7    [NA]=264  [SA]=966  [TW]=886 
+  [BD]=880  [CW]=599  [GR]=30   [LA]=856  [NC]=687  [SB]=677  [TZ]=255 
+  [BE]=32   [CX]=61   [GS]=500  [LB]=961  [NE]=227  [SC]=248  [UA]=380 
+  [BF]=226  [CY]=357  [GT]=502  [LI]=423  [NF]=6723 [SD]=249  [UG]=256 
+  [BG]=359  [CZ]=420  [GW]=245  [LK]=94   [NG]=234  [SE]=46   [US]=1   
+  [BH]=973  [DE]=49   [GY]=592  [LR]=231  [NI]=505  [SG]=65   [UY]=598 
+  [BI]=257  [DJ]=253  [HK]=852  [LS]=266  [NL]=31   [SH]=290  [UZ]=998 
+  [BJ]=229  [DK]=45   [HN]=504  [LT]=370  [NO]=47   [SI]=386  [VA]=379 
+  [BL]=590  [DZ]=213  [HR]=385  [LU]=352  [NP]=977  [SJ]=47   [VE]=58  
+  [BN]=673  [EC]=593  [HT]=509  [LV]=371  [NR]=674  [SK]=421  [VN]=84  
+  [BO]=591  [EE]=372  [HU]=36   [LY]=218  [NU]=683  [SL]=232  [VU]=678 
+  [BQ]=5997 [EG]=20   [ID]=62   [MA]=212  [NZ]=64   [SM]=378  [WF]=681 
+  [BR]=55   [ER]=291  [IE]=353  [MC]=377  [OM]=968  [SN]=221  [WS]=685 
+  [BT]=975  [ES]=34   [IL]=972  [MD]=373  [PA]=507  [SO]=252  [YE]=967 
+  [BV]=47   [ET]=251  [IM]=44   [ME]=382  [PE]=51   [SR]=597  [YT]=262 
+  [BW]=267  [FI]=358  [IN]=91   [MF]=590  [PF]=689  [SS]=211  [ZA]=27  
+  [BY]=375  [FJ]=679  [IO]=246  [MG]=261  [PG]=675  [ST]=239  [ZM]=260 
+  [BZ]=501  [FK]=500  [IQ]=964  [MH]=692  [PH]=63   [SV]=503  [ZW]=263 
+  [CA]=1    [FM]=691  [IR]=98   [MK]=389  [PK]=92   [SY]=963           
+  [CC]=61   [FO]=298  [IS]=354  [ML]=223  [PL]=48   [SZ]=268           
+)
+
+declare -A Ccall
+declare -A Cname
+declare -A CCodes
+CCodes=(
+#     en      fr      es      it      nl
+[AD]="Andorra;Andorre;Andorra;Andorra;Andorra;376"
+[AE]="United Arab Emirates;Emirats Arabes Unis;Emiratos Árabes Unidos;Emirati Arabi Uniti;Verenigde Arabische Emiraten;971"
+[AF]="Afghanistan;Afghanistan;Afganistán;Afganistan;Afghanistan;93"
+[AG]="Antigua and Barbuda;Antigua et Barbuda;Antigua y Barbuda;Antigua e Barbuda;Antigua en Barbuda;1268"
+[AI]="Anguilla;Anguilla;Anguila;Anguilla;Anguilla;1264"
+[AL]="Albania;Albanie;Albania;Albania;Albanië;355"
+[AM]="Armenia;Arménie;Armenia;Armenia;Armenië;374"
+[AN]="Netherlands Antilles;Antilles Néerlandaises;Antillas Neerlandesas;Antille olandesi;Nederlandse Antillen;599"
+[AO]="Angola;Angola;Angola;Angola;Angola;244"
+[AQ]="Antarctica;Antarctique;Antártida;Antartide;Antarctica;6721"
+[AR]="Argentina;Argentine;Argentino;Argentina;Argentinië;54"
+[AS]="American Samoa;Samoa américaines;Samoa Americana;Samoa americane;Amerikaans Samoa;1684"
+[AT]="Austria;Autriche;Austria;Austria;Oostenrijk;43"
+[AU]="Australia;Australie;Australia;Australia;Australië;61"
+[AW]="Aruba;Aruba;Aruba;Aruba;Aruba;297"
+[AX]="Åland;Åland;Åland;Åland;Åland;35818"
+[AZ]="Azerbaijan;Azerbaïdjan;Azerbaiyán;Azerbaigian;Azerbeidzjan;994"
+[BA]="Bosnia and Herzegovina;Bosnie-Herzégovine;Bosnia y Herzegovina;Bosnia ed Erzegovina;Bosnië en Herzegovina;387"
+[BB]="Barbados;Barbade;Barbados;Barbados;Barbados;1246"
+[BD]="Bangladesh;Bangladesh;Bangladés;Bangladesh;Bangladesh;880"
+[BE]="Belgium;Belgique;Bélgica;Belgio;België;32"
+[BF]="Burkina Faso;Burkina Faso;Burkina Faso;Burkina Faso;Burkina Faso;226"
+[BG]="Bulgaria;Bulgarie;Bulgaria;Bulgaria;Bulgarije;359"
+[BH]="Bahrain;Bahreïn;Baréin;Bahrein;Bahrein;973"
+[BI]="Burundi;Burundi;Burundi;Burundi;Burundi;257"
+[BJ]="Benin;Bénin;Benín;Benin;Benin;229"
+[BL]="Saint Barthélemy;Saint Barthélemy;San Bartolomé;Saint Barthélemy;Saint Barthélemy;590"
+[BM]="Bermuda;Bermudes;Bermudas;Bermuda;Bermuda;1441"
+[BN]="Brunei;Brunei;Brunéi;Brunei;Brunei;673"
+[BO]="Bolivia;Bolivie;Bolivia;Bolivia;Bolivia;591"
+[BQ]="Bonaire, Sint Eustatius, and Saba;Bonaire, Sint Eustatius et Saba;Bonaire, San Eustaquio y Saba;Bonaire, Sint Eustatius e Saba;Bonaire, Sint Eustatius en Saba;5997"
+[BR]="Brazil;Brésil;Brasil;Brasile;Brazilië;55"
+[BS]="Bahamas;Bahamas;Bahamas;Bahamas;Bahama's;1242"
+[BT]="Bhutan;Bhoutan;Bután;Bhutan;Bhutan;975"
+[BV]="Bouvet Island;Ile Bouvet;Isla Bouvet;Isola Bouvet;Bouveteiland;47"
+[BW]="Botswana;Botswana;Botsuana;Botswana;Botswana;267"
+[BY]="Belarus;Biélorussie;Bielorrusia;Bielorussia;Wit-Rusland;375"
+[BZ]="Belize;Bélize;Belice;Belize;Belize;501"
+[CA]="Canada;Canada;Canadá;Canada;Canada;1"
+[CC]="Cocos (Keeling) Islands;Îles Cocos (Keeling);Islas Cocos (Keeling);Isole Cocos (Keeling).;Cocos (Keeling) Eilanden;61"
+[CD]="DR Congo;RD Congo;RD Congo;RD Congo;DR Congo;243"
+[CF]="Central African Republic;République centrafricaine;República Centroafricana;Repubblica Centrafricana;Centraal-Afrikaanse Republiek;236"
+[CG]="Congo Republic;République du Congo;República del Congo;Repubblica del Congo;Congo Republiek;242"
+[CH]="Switzerland;Suisse;Suiza;Svizzera;Zwitserland;41"
+[CI]="Ivory Coast;Côte d'Ivoire;Costa de Marfil;Costa d'Avorio;Ivoorkust;225"
+[CK]="Cook Islands;Îles Cook;Islas Cook;Isole Cook;Cook Eilanden;682"
+[CL]="Chile;Chili;Chile;Cile;Chili;56"
+[CM]="Cameroon;Cameroun;Camerún;Camerun;Kameroen;237"
+[CN]="China;Chine;China;Cina;China;86"
+[CO]="Colombia;Colombie;Colombia;Colombia;Colombia;57"
+[CR]="Costa Rica;Costa Rica;Costa Rica;Costarica;Costa Rica;506"
+[CU]="Cuba;Cuba;Cuba;Cuba;Cuba;53"
+[CV]="Cabo Verde;Cap-Vert;Cabo Verde;Capo Verde;Kaapverdië;238"
+[CW]="Curaçao;Curaçao;Curazao;Curaçao;Curaçao;599"
+[CX]="Christmas Island;Île Christmas;Isla de Navidad;Isola di Natale;Christmaseiland;61"
+[CY]="Cyprus;Chypre;Chipre;Cipro;Cyprus;357"
+[CZ]="Czechia;Tchéquie;Chequia;Cechia;Tsjechië;420"
+[DE]="Germany;Allemagne;Alemania;Germania;Duitsland;49"
+[DJ]="Djibouti;Djibouti;Yibuti;Gibuti;Djibouti;253"
+[DK]="Denmark;Danemark;Dinamarca;Danimarca;Denemarken;45"
+[DM]="Dominica;Dominique;Dominica;Domenico;Dominica;1767"
+[DO]="Dominican Republic;République Dominicaine;República Dominicana;Repubblica Dominicana;Dominicaanse Republiek;1809;1829;1849"
+[DZ]="Algeria;Algérie;Argelia;Algeria;Algerije;213"
+[EC]="Ecuador;Equateur;Ecuador;Ecuador;Ecuador;593"
+[EE]="Estonia;Estonie;Estonia;Estonia;Estland;372"
+[EG]="Egypt;Egypte;Egipto;Egitto;Egypte;20"
+[EH]="Western Sahara;Sahara Occidental;Sáhara Occidental;Sahara occidentale;Westelijke Sahara;212"
+[ER]="Eritrea;Erythrée;Eritrea;Eritrea;Eritrea;291"
+[ES]="Spain;Espagne;España;Spagna;Spanje;34"
+[ET]="Ethiopia;Ethiopie;Etiopía;Etiopia;Ethiopië;251"
+[FI]="Finland;Finlande;Finlandia;Finlandia;Finland;358"
+[FJ]="Fiji;Fidji;Fiyi;Figi;Fiji;679"
+[FK]="Falkland Islands;Îles Malouines;Islas Malvinas;Isole Falkland;Falkland Eilanden;500"
+[FM]="Micronesia;Micronésie;Micronesia;Micronesia;Micronesië;691"
+[FO]="Faroe Islands;Îles Féroé;Islas Feroe;Isole Faroe;Faeröer;298"
+[FR]="France;France;Francia;Francia;Frankrijk;33"
+[GA]="Gabon;Gabon;Gabón;Gabon;Gabon;241"
+[GB]="United Kingdom;Royaume-Uni;Reino Unido;Regno Unito;Verenigd Koninkrijk;44"
+[GD]="Grenada;Grenade;Granada;Granada;Grenada;1473"
+[GE]="Georgia;Géorgie;Georgia;Georgia;Georgië;995"
+[GF]="French Guiana;Guyane Française;Guayana Francesa;Guyana francese;Frans-Guyana;594"
+[GG]="Guernsey;Guernesey;Guernesey;Guernsey;Guernsey;44"
+[GH]="Ghana;Ghana;Ghana;Ghana;Ghana;233"
+[GI]="Gibraltar;Gibraltar;Gibraltareño;Gibilterra;Gibraltar;350"
+[GL]="Greenland;Groenland;Groenlandia;Groenlandia;Groenland;299"
+[GM]="The Gambia;Gambie;Gambia;Gambia;Gambia;220"
+[GN]="Guinea;Guinée;Guinea;Guinea;Guinee;224"
+[GP]="Guadeloupe;Guadeloupe;Guadalupe;Guadalupa;Guadeloupe;590"
+[GQ]="Equatorial Guinea;Guinée équatoriale;Guinea Ecuatorial;Guinea Equatoriale;Equatoriaal Guinea;240"
+[GR]="Greece;Grèce;Grecia;Grecia;Griekenland;30"
+[GS]="South Georgia and South Sandwich Islands;Géorgie du Sud et Îles Sandwich du Sud;Islas Georgias del Sur y Sandwich del Sur;Georgia del Sud e Isole Sandwich Australi;South Georgia en South Sandwich Islands;500"
+[GT]="Guatemala;Guatémala;Guatemala;Guatemala;Guatemala;502"
+[GU]="Guam;Guam;Guam;Guam;Guam;1671"
+[GW]="Guinea-Bissau;Guinée-Bissau;Guinea-Bisáu;Guinea-Bissau;Guinee-Bissau;245"
+[GY]="Guyana;Guyane;Guayana;Guyana;Guyana;592"
+[HK]="Hong Kong;Hong-Kong;Hong Kong;Hong Kong;Hongkong;852"
+[HN]="Honduras;Honduras;;Honduras;Honduras;504"
+[HR]="Croatia;Croatie;Croacia;Croazia;Kroatië;385"
+[HT]="Haiti;Haïti;Haití;Haiti;Haïti;509"
+[HU]="Hungary;Hongrie;Hungría;Ungheria;Hongarije;36"
+[ID]="Indonesia;Indonésie;Indonesia;Indonesia;Indonesië;62"
+[IE]="Ireland;Irlande;Irlanda;Irlanda;Ierland;353"
+[IL]="Israel;Israël;Israel;Israele;Israël;972"
+[IM]="Isle of Man;Ile de Man;Isla de Man;Isola di Man;Isle of Man;44162"
+[IN]="India;Inde;India;India;Indië;91"
+[IO]="British Indian Ocean Territory;Territoire britannique de l'océan Indien;Territorio Británico del Océano Índico;Territorio britannico dell'Oceano Indiano;Brits Indische Oceaanterritorium;246"
+[IQ]="Iraq;Irak;Irak;Iraq;Irak;964"
+[IR]="Iran;Iran;Irán;Iran;Iran;98"
+[IS]="Iceland;Islande;Islandia;Islanda;IJsland;354"
+[IT]="Italy;Italie;Italia;Italia;Italië;39"
+[JE]="Jersey;Jersey;Jersey;Jersey;Jersey;44153"
+[JM]="Jamaica;Jamaïque;Jamaica;Giamaica;Jamaica;1876"
+[JO]="Jordan;Jordanie;Jordania;Giordania;Jordanië;962"
+[JP]="Japan;Japon;Japón;Giappone;Japan;81"
+[KE]="Kenya;Kenya;Kenia;Kenia;Kenia;254"
+[KG]="Kyrgyzstan;Kirghizistan;Kirguistán;Kirghizistan;Kirgizië;996"
+[KH]="Cambodia;Cambodge;Camboya;Cambogia;Cambodja;855"
+[KI]="Kiribati;Kiribati;Kiribati;Kiribati;Kiribati;686"
+[KM]="Comoros;Comores;Comoras;Comore;Comoren;269"
+[KN]="St Kitts and Nevis;St Kitts et Nevis;San Cristóbal y Nieves;St Kitts e Nevis;Saint Kitts en Nevis;1869"
+[KP]="North Korea;Corée du Nord;Corea del Norte;Corea del Nord;Noord-Korea;850"
+[KR]="South Korea;Corée du Sud;Corea del Sur;Corea del Sud;Zuid-Korea;82"
+[KW]="Kuwait;Koweït;Kuwait;Kuwait;Koeweit;965"
+[KY]="Cayman Islands;Îles Caïmans;Islas Caimán;Isole Cayman;Kaaimaneilanden;1345"
+[KZ]="Kazakhstan;Kazakhstan;Kazajistán;Kazakistan;Kazachstan;7"
+[LA]="Laos;Laos;Laos;Laos;Laos;856"
+[LB]="Lebanon;Liban;Líbano;Libano;Libanon;961"
+[LC]="Saint Lucia;Sainte Lucie;Santa Lucía;Santa Lucia;Saint Lucia;1758"
+[LI]="Liechtenstein;Liechtenstein;Liechtenstein;Liechtenstein;Liechtenstein;423"
+[LK]="Sri Lanka;Sri Lanka;Sri Lanka;Sri Lanka;Sri Lanka;94"
+[LR]="Liberia;Libéria;Liberia;Liberia;Liberia;231"
+[LS]="Lesotho;Lesotho;Lesoto;Lesotho;Lesotho;266"
+[LT]="Lithuania;Lituanie;Lituania;Lituania;Litouwen;370"
+[LU]="Luxembourg;Luxembourg;Luxemburgo;Lussemburgo;Luxemburg;352"
+[LV]="Latvia;Lettonie;Letonia;Lettonia;Letland;371"
+[LY]="Libya;Libye;Libia;Libia;Libië;218"
+[MA]="Morocco;Maroc;Marruecos;Marocco;Marokko;212"
+[MC]="Monaco;Monaco;Mónaco;Monaco;Monaco;377"
+[MD]="Moldova;Moldavie;Moldavia;Moldavia;Moldavië;373"
+[ME]="Montenegro;Monténégro;Montenegro;Montenegro;Montenegro;382"
+[MF]="Saint Martin;Saint-Martin;San Martín;San Martino;Sint Maarten;590"
+[MG]="Madagascar;Madagascar;Madagascar;Madagascar;Madagaskar;261"
+[MH]="Marshall Islands;Îles Marshall;Islas Marshall;Isole Marshall;Marshalleilanden;692"
+[MK]="North Macedonia;Macédoine du Nord;Macedonia del Norte;Macedonia del Nord;Noord-Macedonië;389"
+[ML]="Mali;Mali;Malí;Mali;Mali;223"
+[MM]="Myanmar;Birmanie;Birmania;Birmania;Myanmar;95"
+[MN]="Mongolia;Mongolie;Mongolia;Mongolia;Mongolië;976"
+[MO]="Macao;Macao;Macao;Macao;Macau;853"
+[MP]="Northern Mariana Islands;Îles Mariannes du Nord;Islas Marianas del Norte;Isole Marianne Settentrionali;Noordelijke Marianen;1670"
+[MQ]="Martinique;Martinique;Martinica;Martinica;Martinique;596"
+[MR]="Mauritania;Mauritanie;Mauritania;Mauritania;Mauritanië;222"
+[MS]="Montserrat;Montserrat;Montserrat;Montserrat;Montserrat;1664"
+[MT]="Malta;Malte;Malta;Malta;Malta;356"
+[MU]="Mauritius;Maurice;Mauricio;Maurizio;Mauritius;230"
+[MV]="Maldives;Maldives;Maldivas;Maldive;Malediven;960"
+[MW]="Malawi;Malawi;Malaui;Malawi;Malawi;265"
+[MX]="Mexico;Mexique;México;Messico;Mexico;52"
+[MY]="Malaysia;Malaisie;Malasia;Malesia;Maleisië;60"
+[MZ]="Mozambique;Mozambique;Mozambique;Mozambico;Mozambique;258"
+[NA]="Namibia;Namibie;;Namibia;Namibië;264"
+[NC]="New Caledonia;Nouvelle-Calédonie;Nueva Caledonia;Nuova Caledonia;Nieuw-Caledonië;687"
+[NE]="Niger;Niger;Níger;Nigeria;Nigeria;227"
+[NF]="Norfolk Island;Île Norfolk;Isla Norfolk;Isola Norfolk;Norfolkeiland;6723"
+[NG]="Nigeria;Nigéria;Nigeria;Nigeria;Niger;234"
+[NI]="Nicaragua;Nicaragua;Nicaragua;Nicaragua;Nicaragua;505"
+[NL]="Netherlands;Pays-Bas;Países Bajos;Paesi Bassi;Nederland;31"
+[NO]="Norway;Norvège;Noruega;Norvegia;Noorwegen;47"
+[NP]="Nepal;Népal;Nepal;Il Nepal;Nepal;977"
+[NR]="Nauru;Nauru;Nauru;Nauru;Nauru;674"
+[NU]="Niue;Niué;Niue;Niue;Niue;683"
+[NZ]="New Zealand;Nouvelle-Zélande;Nueva Zelanda;Nuova Zelanda;Nieuw-Zeeland;64"
+[OM]="Oman;Oman;Omán;Oman;Oman;968"
+[PA]="Panama;Panama;Panamá;Panama;Panama;507"
+[PE]="Peru;Pérou;Perú;Perù;Peru;51"
+[PF]="French Polynesia;Polynésie française;Polinesia Francesa;Polinesia francese;Frans-Polynesië;689"
+[PG]="Papua New Guinea;Papouasie-Nouvelle-Guinée;Papúa Nueva Guinea;Papua Nuova Guinea;Papoea-Nieuw-Guinea;675"
+[PH]="Philippines;Philippines;Filipinas;Filippine;Filipijnen;63"
+[PK]="Pakistan;Pakistan;Pakistán;Pakistan;Pakistan;92"
+[PL]="Poland;Pologne;Polonia;Polonia;Polen;48"
+[PM]="Saint Pierre and Miquelon;Saint Pierre et Miquelon;San Pedro y Miquelón;Saint Pierre e Miquelon;Saint Pierre en Miquelon;508"
+[PN]="Pitcairn Islands;Îles Pitcairn;Islas Pitcairn;Isole Pitcairn;Pitcairneilanden;64"
+[PR]="Puerto Rico;Porto Rico;Puerto Rico;Porto Rico;Puerto Rico;1787;1939"
+[PS]="Palestine;Palestine;Palestina;Palestina;Palestina;970"
+[PT]="Portugal;Portugal;Portugal;Portogallo;Portugal;351"
+[PW]="Palau;Palaos;Palaos;Palau;Palau;680"
+[PY]="Paraguay;Paraguay;Paraguayo;Paraguay;Paraguay;595"
+[QA]="Qatar;Qatar;Catar;Qatar;Qatar;974"
+[RE]="Réunion;Réunion;Reunión;Riunione;Réunion;262"
+[RO]="Romania;Roumanie;Rumania;Romania;Roemenië;40"
+[RS]="Serbia;Serbie;Serbia;Serbia;Servië;381"
+[RU]="Russia;Russie;Rusia;Russia;Rusland;7"
+[RW]="Rwanda;Rwanda;Ruanda;Ruanda;Rwanda;250"
+[SA]="Saudi Arabia;Arabie Saoudite;Arabia Saudita;Arabia Saudita;Saoedi-Arabië;966"
+[SB]="Solomon Islands;Îles Salomon;Islas Salomón;Isole Salomone;Salomonseilanden;677"
+[SC]="Seychelles;Seychelles;Seychelles;Seychelles;Seychellen;248"
+[SD]="Sudan;Soudan;Sudán;Sudan;Soedan;249"
+[SE]="Sweden;Suède;Suecia;Svezia;Zweden;46"
+[SG]="Singapore;Singapour;Singapur;Singapore;Singapore;65"
+[SH]="Saint Helena;Sainte-Hélène;Santa Elena;Sant'Elena;Sint-Helena;290"
+[SI]="Slovenia;Slovénie;Eslovenia;Slovenia;Slovenië;386"
+[SJ]="Svalbard and Jan Mayen;Svalbard et Jan Mayen;Svalbard y Jan Mayen;Svalbard e Jan Mayen;Spitsbergen en Jan Mayen;47"
+[SK]="Slovakia;Slovaquie;Eslovaquia;Slovacchia;Slowakije;421"
+[SL]="Sierra Leone;Sierra Léone;Sierra Leona;Sierra Leone;Sierra Leone;232"
+[SM]="San Marino;Saint-Marin;San Marino;San Marino;San Marino;378"
+[SN]="Senegal;Sénégal;Senegal;Senegal;Senegal;221"
+[SO]="Somalia;Somalie;Somalia;Somalia;Somalië;252"
+[SR]="Suriname;Surinam;Surinam;Suriname;Suriname;597"
+[SS]="South Sudan;Soudan du Sud;Sudán del Sur;Sud Sudan;Zuid-Soedan;211"
+[ST]="São Tomé and Príncipe;São Tomé et Príncipe;Santo Tomé y Príncipe;São Tomé e Príncipe;Sao Tomé en Principe;239"
+[SV]="El Salvador;Salvador;El Salvador;El Salvador;El Salvador;503"
+[SX]="Sint Maarten;Saint-Martin;Sint Maarten;Sint Maarten;Sint Maarten;1721"
+[SY]="Syria;Syrie;Siria;Siria;Syrië;963"
+[SZ]="Eswatini;Eswatini;Esuatini;Swaziland;Eswatini;268"
+[TC]="Turks and Caicos Islands;Îles Turques et Caïques;Islas Turcas y Caicos;Isole Turks e Caicos;Turks- en Caicoseilanden;1649"
+[TD]="Chad;Tchad;Chad;Ciad;Tsjaad;235"
+[TF]="French Southern Territories;Terres Australes Françaises;Territorios Australes Franceses;Territori australi francesi;Franse Zuidelijke Gebieden;262"
+[TG]="Togo;Togo;Togo;Togo;Togo;228"
+[TH]="Thailand;Thaïlande;Tailandia;Tailandia;Thailand;66"
+[TJ]="Tajikistan;Tadjikistan;Tayikistán;Tagikistan;Tadzjikistan;992"
+[TK]="Tokelau;Tokélaou;Tokelau;Tokelau;Tokelau;690"
+[TL]="Timor-Leste;Timor oriental;Timor Oriental;Timor Est;Oost-Timor;670"
+[TM]="Turkmenistan;Turkménistan;Turkmenistán;Turkmenistan;Turkmenistan;993"
+[TN]="Tunisia;Tunisie;Túnez;Tunisia;Tunesië;216"
+[TO]="Tonga;Tonga;Tonga;Tonga;Tonga;676"
+[TR]="Turkey;Turquie;Turquía;Turchia;Turkije;90"
+[TT]="Trinidad and Tobago;Trinité-et-Tobago;Trinidad y Tobago;Trinidad e Tobago;Trinidad en Tobago;1868"
+[TV]="Tuvalu;Tuvalu;Tuvalu;Tuvalu;Tuvalu;688"
+[TW]="Taiwan;Taïwan;Taiwán;Taiwan;Taiwan;886"
+[TZ]="Tanzania;Tanzanie;Tanzania;Tanzania;Tanzania;255"
+[UA]="Ukraine;Ukraine;Ucrania;Ucraina;Oekraïne;380"
+[UG]="Uganda;Ouganda;Uganda;Uganda;Oeganda;256"
+[UM]="U.S. Outlying Islands;Îles éloignées des États-Unis;Islas periféricas de EE. UU.;Isole esterne degli Stati Uniti;Amerikaanse afgelegen eilanden;1"
+[US]="United States;États-Unis;Estados Unidos;Stati Uniti;Verenigde Staten;1"
+[UY]="Uruguay;Uruguay;Uruguay;Uruguay;Uruguay;598"
+[UZ]="Uzbekistan;Ouzbékistan;Uzbekistán;Uzbekistan;Oezbekistan;998"
+[VA]="Vatican City;Cité du Vatican;Ciudad del Vaticano;Città del Vaticano;Vaticaanstad;379"
+[VC]="St Vincent and Grenadines;St Vincent et les Grenadines;San Vicente y las Granadinas;St Vincent e Grenadine;Saint Vincent en de Grenadines;1784"
+[VE]="Venezuela;Vénézuela;Venezuela;Venezuela;Venezuela;58"
+[VG]="British Virgin Islands;Iles Vierges Britanniques;Islas Vírgenes Británicas;Isole Vergini britanniche;Britse Maagdeneilanden;1284"
+[VI]="U.S. Virgin Islands;Îles Vierges des États-Unis;Islas Vírgenes de los Estados Unidos;Isole Vergini americane;Amerikaanse Maagdeneilanden;1340"
+[VN]="Vietnam;Vietnam;Vietnam;Vietnam;Vietnam;84"
+[VU]="Vanuatu;Vanuatu;Vanuatu;Vanuatu;Vanuatu;678"
+[WF]="Wallis and Futuna;Wallis et Futuna;Wallis y Futuna;Wallis e Futuna;Wallis en Futuna;681"
+[WS]="Samoa;Samoa;Samoa;Samoa;Samoa;685"
+[XK]="Kosovo;Kosovo;Kosovo;Kosovo;Kosovo;383"
+[YE]="Yemen;Yémen;Yemen;Yemen;Jemen;967"
+[YT]="Mayotte;Mayotte;Mayotte;Mayotte;Mayotte;262"
+[ZA]="South Africa;Afrique du Sud;Sudáfrica;Sud Africa;Zuid-Afrika;27"
+[ZM]="Zambia;Zambie;Zambia;Zambia;Zambia;260"
+[ZW]="Zimbabwe;Zimbabwé;Zimbabue;Zimbabwe;Zimbabwe;263"
+)
+
+for i in "${!CCodes[@]}"; do
+  IFS=';' read -ra k <<<"${CCodes[$i]}"
+  Cname[$i]="${k[4]}"
+  Ccall[$i]="${k[-1]}"
+done
+
+# now  country="${Cname[DO]}" is like  country="Dominican Republic"
+# and callcode="${Ccall[DO}}" is like callcode="1809;1829;1849"
+
+Mycountry=${Cname[Myccode]}
+
+:<<'DOC' #---------------------------------------------------------------------
+= find_country
+synopsis:	find_country countrycode
+description:	From the countrycode (FR, NL, GB, BE, et cetera) find the
+		country name.
+                The Vcard ADD entry has 7 fields; the last field is the
+                country name. This name can occur in any language, while
+                what we need in address labels is the name of the country
+                in the language of the country where we live (Mylanguage),
+                so that the postman recognizes it. Therefore, contmgr
+                expects the country code in this field, and if it finds a
+                country name instead, in any of the languages it
+                understands, it replaces it with the country code.
+		Finally, |find_country| prints country code, call code and 
+		country name, separated with |-characters. If the country code
+		happens to be the country of the user (|Myccode|), then the
+		country name is cleared, since it would not have to be written 
+		on address labels in that case.
+		Example: 
+DOC
+#-------------------------------------------------------------------------------
+find_country() { 
+   local country
+   if [[ -z $1 ]]; then
+      Warn "Missing country code, assuming $Myccode"
+      echo "$Myccode|${Ccall[$Myccode]}|${Cname[$Myccode]}"
+   else
+      country=${Cname[$1]}
+      if [[ -n $country ]]; then
+         # if it is indeed a country code
+         echo "$1|${Ccall[$1]}|${country%Mycountry}"
+      else
+         # it may be a country name in one of the languages:
+         country='Unknown'
+         for i in "${!CCodes[@]}"; do
+           if [[ ${CCodes[$i]} =~ $1\; ]]; then
+              Warn "Replacing country name $1 with country code"
+              echo "$i|${Ccall[$i]}|${Cname[$i]%Mycountry}"
+              return
+           fi
+         done
+         echo "??|??|Unknown"
+      fi
+   fi
+}
 
 :<<'DOC' #---------------------------------------------------------------------
 = mobtest
@@ -1077,7 +1451,7 @@ description:	Test if the content of the named variable in arg 1 is probably a
 		mobile number. If so, and arg 3 is false, of if not and arg 3 is
 		true, issue a warning.
 		Finally, edit the content of arg 1 by replacing an initial 
-		|+$Mycode| with 0 for nicer display (unless the output format is 
+		|+$Myccode| with 0 for nicer display (unless the output format is 
 		|vcard|.
 DOC
 #-------------------------------------------------------------------------------
@@ -1156,7 +1530,7 @@ s/;PREF=[0-9]\+//gI			# remove PREF=n
 /^ORG:$/d
 /^TEL[:;]/Is/[() ~ -]//g			# + and digits only
 /^TEL[;:]/Is/:00/:+/			# 00 → +
-/^TEL[;:]/Is/:0/:+'"$Mycode"'/		# 0 → +31
+/^TEL[;:]/Is/:0/:+'"$Myccode"'/		# 0 → +31
 /TYPE=\(FAX\|PAGER\)/Id			# remove FAX etc. entries
 ' |
 # sort by N and/or ORG, ignore ‘ and ' at start of N-field:
@@ -1179,7 +1553,7 @@ while read -r file; do
 	 Last Middle Mphone Nick Note Org Prefix Suffix Url \
 	 Wcity Wcountry Wext Wmail Wphone Wpobox Wstate Wstreet Wzip \
 	 ahome awork ehome ework pcell phome pwork
-   Harea='' Warea='' Keys=()
+   Hccode='' Wccode='' Hcountry='' Wcountry='' Keys=()
    while IFS= read -r line; do
       Type=''
       if [[ $line =~ TYPE=([[:alpha:]]*) ]]; then
@@ -1232,7 +1606,7 @@ while read -r file; do
              Hstate="${BASH_REMATCH[5]}"
              Hzip="${BASH_REMATCH[6]^^}"
              Hzip="${Hzip// /}"
-             Hcountry="${BASH_REMATCH[7]/Netherlands/Nederland}"
+             IFS='|' read -r Hccode Hcall Hcountry <<<"$(find_country "${BASH_REMATCH[7]}")"
              ;;
          (work)
              awork=1
@@ -1243,22 +1617,21 @@ while read -r file; do
              Wstate="${BASH_REMATCH[5]}"
              Wzip="${BASH_REMATCH[6]^^}"
              Wzip="${Wzip// /}"
-             Wcountry="${BASH_REMATCH[7]/Netherlands/Nederland}"
+             IFS='|' read -r Wccode Wcall Wcountry <<<"$(find_country "${BASH_REMATCH[7]}")"
              ;;
         ('') Warn "Already have home and work addresses, skipping $line"
              ;;
          (*) Warn "Skipping address $line of unrecognized type ($Type)"
          esac
-      elif [[ $line =~ ^X-CCODE-HOME:(.*) ]]; then
-         Harea=${BASH_REMATCH[1]}
-      elif [[ $line =~ ^X-CCODE-WORK:(.*) ]]; then
-         Warea=${BASH_REMATCH[1]}
       elif [[ $line =~ ^CATEGORIES:(.*)$ ]]; then
          IFS=, read -ra Keys <<<"${BASH_REMATCH[1]}"
+      elif [[ $line =~ ^TITLE: ]]; then
+         # skip: TITLE lines are copied from CATEGORIES to make the latter searchable
+         continue
       elif [[ $line =~ ^TEL:(.*) ]]; then
          v="${BASH_REMATCH[1]}"
          if [[ ! $v =~ ^(11|14|\+)[0-9]+$ ]]; then
-            Warn "$(displayname): phone number $v has wrong format"
+            Warn "phone number $v has wrong format"
          fi
          # v is now 11n or 114 or +nnnnn...
          filltype phome pwork pcell
