@@ -36,25 +36,23 @@ contmgr [options] [searchkey]
 
 == Format specific options (b, l, t and T specify relevant formats):
 
--d,--dark	(t)   do not use color in terminal output
--f,--font=X	(bl)  set font and/or bold font and/or pointsize.
-		      Default: X='DejaVuSerif,DejaVuSerif-Bold 12'
-		      Argument examples:
-		       'a,b 12' 'a,b' 'a' 'a 12' 'a, 12' ',b' '12'
-		      The last one (|'12'|) changes the pointsize only.
--N,--nocolor	(t)   set colors for dark background
--n,--noarea=X	(bl)  in phone numbers, remove area codes with the
-		      value X, possibly prefixed with 0 (zero)
--r,--return=X	(l)   use X as return addres in labels, commas are 
-		      replaced with bullets
--c,--counter	(b)   prefix display name in booklet with a counter for
-		      reference
+-d,--dark	(t) do not use color in terminal output
+-f,--font=X	(bl) set one or more of regular font, bold font, and pointsize.
+		Default: |X='DejaVuSerif,DejaVuSerif-Bold 12'|
+		Argument examples:
+		|'a,b 12' 'a,b' 'a' 'a 12' 'a, 12' ',b' '12'|
+		The last one (|'12'|) changes the pointsize only.
+-N,--nocolor	(t) set colors for dark background
+-n,--noarea=X	(bl) in phone numbers, remove area codes with the
+		value X, possibly prefixed with 0 (zero)
+-r,--return=X	(l) use X as return addres in labels, commas are replaced with
+		bullets
+-c,--counter	(b) prefix display name in booklet with a counter for reference
 -B,--blind	(ltT) suffix label lines with a dot for visually
-		      handicapped, text-to-voice progs will pause there
-		      Labels will be boxed to force reading horizontally.
-		      Creates a nickname in vcards containing most
-		      info. The nickname can easily be invoked to be
-		      read aloud on an iphone.
+		handicapped, text-to-voice progs will pause there Labels
+		will be boxed to force reading horizontally. Creates a
+		nickname in vcards containing most info. The nickname can
+		easily be invoked to be read aloud on an iphone.
 
 = Description
 contmgr lists your contacts to standard output. If you provide a search
@@ -70,37 +68,37 @@ vcard file. The following table shows the vcard fields that are stored
 and the formats (v=vcard, T=tagged, x=xml, t=terminal, b=booklet, l=label L=letter)
 in which they are reproduced:
 
-Last	 vTxtblL N 1
-First	 vTxtblL N 2
-Middle	 vTxtb-  N 3
-Prefix	 vT-tblL N 4
-Suffix	 vT-tblL N 5
-Nick	 vTxtb-  NICKNAME
-Disp	 vT----  FN (unused, reconstructed from above entries)
-Org	 vTxtb-  ORG
-Url	 vT-t--  URL
-Bday	 vT-t--  BDAY
-Hmail	 vTxt--  EMAIL;TYPE=HOME
-Wmail	 vTxt--  EMAIL;TYPE=WORK
-Hpobox	 vT-tblL ADR;TYPE=HOME 1
-Hext	 vT-tblL ADR;TYPE=HOME 2
-Hstreet	 vT-tblL ADR;TYPE=HOME 3
-Hcity	 vT-tblL ADR;TYPE=HOME 4
-Hstate	 vT-tblL ADR;TYPE=HOME 5
-Hzip	 vT-tblL ADR;TYPE=HOME 6
-Hccode	 vT-tblL ADR;TYPE=HOME 7
-Wpobox	 vT-tblL ADR;TYPE=WORK 1
-Wext	 vT-tblL ADR;TYPE=WORK 2
-Wstreet	 vT-tblL ADR;TYPE=WORK 3
-Wcity	 vT-tblL ADR;TYPE=WORK 4
-Wstate	 vT-tblL ADR;TYPE=WORK 5
-Wzip	 vT-tblL ADR;TYPE=WORK 6
-Wccode	 vT-tblL ADR;TYPE=WORK 7
-Keys	 vT-t--  CATEGORIES
-Hphone	 vTxt--  TEL;TYPE=HOME
-Wphone	 vTxt--  TEL;TYPE=WORK
-Mphone	 vTxt--  TEL;TYPE=CELL
-Note	 vT-tb-  NOTE
+Last	vTxtblL	N 1
+First	vTxtblL	N 2
+Middle	vTxtb-	N 3
+Prefix	vT-tblL	N 4
+Suffix	vT-tblL	N 5
+Nick	vTxtb-	NICKNAME
+Disp	vT----	FN (unused, reconstructed from above entries)
+Org	vTxtb-	ORG
+Url	vT-t--	URL
+Bday	vT-t--	BDAY
+Hmail	vTxt--	EMAIL;TYPE=HOME
+Wmail	vTxt--	EMAIL;TYPE=WORK
+Hpobox	vT-tblL	ADR;TYPE=HOME 1
+Hext	vT-tblL	ADR;TYPE=HOME 2
+Hstreet	vT-tblL	ADR;TYPE=HOME 3
+Hcity	vT-tblL	ADR;TYPE=HOME 4
+Hstate	vT-tblL	ADR;TYPE=HOME 5
+Hzip	vT-tblL	ADR;TYPE=HOME 6
+Hccode	vT-tblL	ADR;TYPE=HOME 7
+Wpobox	vT-tblL	ADR;TYPE=WORK 1
+Wext	vT-tblL	ADR;TYPE=WORK 2
+Wstreet	vT-tblL	ADR;TYPE=WORK 3
+Wcity	vT-tblL	ADR;TYPE=WORK 4
+Wstate	vT-tblL	ADR;TYPE=WORK 5
+Wzip	vT-tblL	ADR;TYPE=WORK 6
+Wccode	vT-tblL	ADR;TYPE=WORK 7
+Keys	vT-t--	CATEGORIES
+Hphone	vTxt--	TEL;TYPE=HOME
+Wphone	vTxt--	TEL;TYPE=WORK
+Mphone	vTxt--	TEL;TYPE=CELL
+Note	vT-tb-	NOTE
 
 Note that the last (7th) field of the ADR entry is supposed to be a country
 code, like NL for The Netherlands. Vcard exports of most applications tend
@@ -223,13 +221,13 @@ handle_options() {
       case $1 in
 # General options:
 
-      (-h|--help)       # Print this help and exit
+      (-h|--help)	# Print this help and exit
 			helpsrt
 			;;
-      (-H|--Help)       # Show full documentation and exit
+      (-H|--Help)	# Show full documentation and exit
 			helpall
 			;;
-      (-V|--version)    # Print version and exit
+      (-V|--version)	# Print version and exit
 			echo "$Version"
 			exit
 			;;
@@ -249,17 +247,17 @@ handle_options() {
 			Key="$2"
 			shift 2
 			;;
-      (-w|--word)       # search key must be a complete word
+      (-w|--word)	# search key must be a complete word
 			Grepopt=-wirl
 			shift
 			;;
 # Format options:
 
-      (-b|--booklet)    # print booklet
+      (-b|--booklet)	# print booklet
 			Format=booklet
 			shift
 			;;
-      (-l|--labels)     # print tex source for address labels
+      (-l|--labels)	# print tex source for address labels
 			Format=labels
 			shift
 			;;
@@ -267,37 +265,37 @@ handle_options() {
 			Format=letter
 			shift
 			;;
-      (-s|--sorter)     # print only first line of |--term| format
+      (-s|--sorter)	# print only first line of |--term| format
 			Format=sorter
 			shift
 			;;
-      (-t|--term)       # print to terminal (this is the default format)
-			Format=term
-			shift
-			;;
-      (-T|--tagged)     # print tag / value list
+      (-T|--tagged)	# print tag / value list
 			Format=tagged
 			shift
 			;;
-      (-v|--vcard)      # print vcards
+      (-t|--term)	# print to terminal (this is the default format)
+			Format=term
+			shift
+			;;
+      (-v|--vcard)	# print vcards
 			Format=vcard
 			# sort by FN:
 			sorter() {
 			   msort --quiet \
-      			   --suppress-log \
-      			   --block \
-      			   --tag="FN:" \
-        		   --fold-case
+			   --suppress-log \
+			   --block \
+			   --tag="FN:" \
+			   --fold-case
 			}
 			shift
 			;;
-      (-x|--xml)        # print xml for FritzBox
+      (-x|--xml)	# print xml for FritzBox
 			Format=xml
 			shift
 			;;
 # Format specific options (b, l, t and T specify relevant formats):
 
-      (-d|--dark)       # (t)   do not use color in terminal output
+      (-d|--dark)	# (t)   do not use color in terminal output
 			dark
 			shift
 			;;
@@ -336,28 +334,28 @@ handle_options() {
 			Return="${2//,/\\bul }"
 			shift 2
 			;;
-      (-c|--counter)    # (b)   prefix display name with a counter
+      (-c|--counter)	# (b)   prefix display name with a counter
 			counter=true
 			shift
 			;;
-      (-B|--blind)      # (ltT) suffix label lines with a dot for visually
+      (-B|--blind)	# (ltT) suffix label lines with a dot for visually
 			#       handicapped, text-to-voice progs will pause there
 			#       Labels will be boxed to force reading horizontally.
-                        #       Creates a nickname in vcards containing most
-                        #       info. The nickname can easily be invoked to be
-                        #       read aloud on an iphone.
+			#       Creates a nickname in vcards containing most
+			#       info. The nickname can easily be invoked to be
+			#       read aloud on an iphone.
 			Dot=.
 			Blind=true
 			shift
 			;;
-      (-I)	        instscript "$0" ||
+      (-I)		instscript "$0" ||
 			   die 'the -I option is for developers only'
 			exit
 			;;
-      (--)              shift
+      (--)		shift
 			break
 			;;
-      (*)               break
+      (*)		break
 			;;
       esac
    done
@@ -490,25 +488,25 @@ pr_city() {
    [[ -n $5 ]] && $5 && space=''
    case "$ccode" in
     (LU) # Luxemburg
-         echo -n "L-${1//[L-]/} $2" # L-1234
+	 echo -n "L-${1//[L-]/} $2" # L-1234
 	 ;;
     (GB) # UK
-         echo -ne "$2\n${1%???}$space${1: -3}" # all but last 3 <space> last 3
+	 echo -ne "$2\n${1%???}$space${1: -3}" # all but last 3 <space> last 3
 	 ;;
     (FR|ES|CH|AT|NO|DR|FI|HR|MC) # France, Spain, Switserland, Austria, ...
-         echo -n "$1 $2" 
+	 echo -n "$1 $2" 
 	 ;;
     (BE) # Belgium
-         echo -n "B-${1//[B-]/} $2" # B-1234
+	 echo -n "B-${1//[B-]/} $2" # B-1234
 	 ;;
     (NL) # Netherlands
-         echo -n "${1:0:4}$space${1:4:2} $2" # first 4 <space> last 2
+	 echo -n "${1:0:4}$space${1:4:2} $2" # first 4 <space> last 2
 	 ;;
     (IT) # Italy:
-         echo -n "$1 $2 $3"
+	 echo -n "$1 $2 $3"
 	 ;;
     (US) # USA
-         echo -n "$2 ${1:0:2}$space${1:2:5}"
+	 echo -n "$2 ${1:0:2}$space${1:2:5}"
 	 ;;
      (*) Warn "Please add $ccode to my pr_city function"
 	 ;;
@@ -533,30 +531,30 @@ fix() {
    p=${p/+/00}
    case $p in
    ('') eval "$1=''"
-        ;;
+	;;
     (*) for i in "${AreaCodes[@]}"; do
-           if [[ $p =~ ^0$i(.*) ]]; then
-              area="0$i " n=${BASH_REMATCH[1]}
-              [[ $area == "0$Noarea " ]] && area=''
-              case ${#n} in
-              (4)    v="$n"
+	   if [[ $p =~ ^0$i(.*) ]]; then
+	      area="0$i " n=${BASH_REMATCH[1]}
+	      [[ $area == "0$Noarea " ]] && area=''
+	      case ${#n} in
+	      (4)    v="$n"
 		     ;;
-              (6|9)  v="${n:0:3} ${n:3:3} ${n:6:3}"
+	      (6|9)  v="${n:0:3} ${n:3:3} ${n:6:3}"
 		     ;;
-              (7)    v="${n:0:3} ${n:3:4}"
+	      (7)    v="${n:0:3} ${n:3:4}"
 		     ;;
-              (8|10) v="${n:0:4} ${n:4:4} ${n:8:2}"
+	      (8|10) v="${n:0:4} ${n:4:4} ${n:8:2}"
 		     ;;
-              (11)   v="${n:0:4} ${n:4:3} ${n:7:4}"
+	      (11)   v="${n:0:4} ${n:4:3} ${n:7:4}"
 		     ;;
-              (*)    Warn "Invalid phone number: $area$n"
-                     v="$n"
+	      (*)    Warn "Invalid phone number: $area$n"
+		     v="$n"
 		     ;;
-              esac
-              eval "$1=\$area\${v% }"
-           fi
-        done
-        ;;
+	      esac
+	      eval "$1=\$area\${v% }"
+	   fi
+	done
+	;;
    esac
 }
 
@@ -577,13 +575,9 @@ texescape() {
 :<<'DOC' #---------------------------------------------------------------------
 = displayname
 description:	print Last, First (Organization), but clean up if some are empty.
-
 		 First=Wybo Last=Dekker Org=DekDoc displayname → Dekker, Wybo (DekDoc)
-
 		 First=Wybo Last=Dekker Org=''     displayname → Dekker, Wybo
-
 		 First=''   Last=Dekker Org=DekDoc displayname → Dekker (DekDoc)
-
 		 First=''   Last=''     Org=DekDoc displayname → DekDoc
 DOC
 #-------------------------------------------------------------------------------
