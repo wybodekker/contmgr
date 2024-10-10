@@ -3,9 +3,6 @@
 Myname="${0##*/}"
 Version=2.06
 
-# To do:
-# Option running  ~/Contacts/sortcont ?
-
 :<<'DOC'
 = contmgr - list contacts for your terminal iPad, Fritz!Box, hand bag
 
@@ -48,25 +45,31 @@ contmgr [options] [searchkey]
 -r,--return=X	(l) use X as return addres in labels, commas are replaced with
 		bullets
 -c,--counter	(b) prefix display name in booklet with a counter for reference
--B,--blind	(ltT) suffix label lines with a dot for visually
-		handicapped, text-to-voice progs will pause there Labels
-		will be boxed to force reading horizontally. Creates a
-		nickname in vcards containing most info. The nickname can
-		easily be invoked to be read aloud on an iphone.
+-B,--blind	(ltTv) Modifies the output for visually handicapped users:
+                - Terminal output will be one-liners, with white space
+                between the lines. Dots are inserted where appropriate, in
+                order to have text-to-voice programs too pause there.
+                - Label output and tagged output is modified by suffixing
+                  label lines with a dot for the same reason. Labels will
+                  be boxed to force reading horizontally.
+                - Vcard output will get a NICKNAME entry containing most
+                info. This nickname can easily be invoked to be read
+                aloud on an iphone: he Siri, what is the nickname of
+                Barack Obama?
 
 = Description
 contmgr lists your contacts to standard output. If you provide a search
 key, only contacts containing that key are listed. With the |--word| option, 
 the search key must occur as a whole word.
 
-The input is a vcard file exported from, for example, Thunderbird or the
-iCloud. The name of the vcard file is supposed to be in the environment
-variable CONTACTS, unless it is given with the |--input| option.
+The input is a vcard file maintained in, for example, Thunderbird or the
+iCloud. The name of the vcard file is is read from the configuration file,
+see below, but it can be modified with the |--input| option.
 
-There are some limitations on the data that are read from that
-vcard file. The following table shows the vcard fields that are stored
-and the formats (v=vcard, T=tagged, x=xml, t=terminal, b=booklet, l=label L=letter)
-in which they are reproduced:
+There are some limitations on the data that are read from that vcard file.
+The following table shows the vcard fields that are stored and the formats
+(v=vcard, T=tagged, x=xml, t=terminal, b=booklet, l=label L=letter) in
+which they are reproduced:
 
 Last	vTxtblL	N 1
 First	vTxtblL	N 2
@@ -117,7 +120,33 @@ ES, IT, and NL.
 contmgr can print in various formats, specified in the |--format| option.
 Currently, the following formats are available:
 
-==
+== booklet
+This produces a latex source on standard output, to be printed twosided on
+A4 paper, which can be folded to create an A5 booklet.
+
+== labels
+Produces a latex source on standard output, to be printed on A4 sheets with
+sticky labels.
+
+== letter
+Produces a latex source on standard output, containing one letter for each
+address. The content of the letter has to be insertes afterwards.
+
+== sorter
+Lists the records, one line for each, with name, organisation, birth day,
+age and any tags.
+
+== tagged
+Lists each record completely, one field per line, prefixed with the
+fields tags.
+
+== term
+This is the default. Lists each record completely, with Home data on the
+left, work data on the right, mobile numer in the middle.
+
+== vcard
+Prints the reformatted vcard file, sorting the fields and the records,
+cleaning up unneeded fields.
 
 = Configuration
 The defaults for some variables, like font, fontsize, vcard file, and
@@ -131,7 +160,6 @@ These files are read in this order and they can contain input such as this:
    Bold='DejaVuSerif-Bold'
    Input="$HOME/Contacts.vcf"
    Myccode=NL
-   Mylanguage=NL
    Cols=3
    Rows=8
    Paperwidth=210
@@ -178,12 +206,17 @@ helpall() { sed -n "/^:<<'DOC'$/,/^DOC/p" "$0"|sed '1d;$d'|
             less -P"$Myname-${Version/./·} (press h for help, q to quit)";exit; }
 sorter() { cat; }
 
+
+for i in awk csplit getopt mktemp pnc realpath xargs; do
+  command -v $i  >/dev/null || die "Please install $i"
+done
+
 :<<'DOC' #----------------------------------------------------------------------
 = handle_options
 synopsis:	 handle_options "$@"
 description:	handle the options.
 globals used:	 Myname Version AreaCodes
-globals  set:	 Args Noarea Grepopt Format Return Fontsize Font Bold Input
+globals  set:	 Args Nodial Grepopt Format Return Fontsize Font Bold Input
 		 Mycountry Key
 returns:	the number of remaining arguments
 DOC
@@ -198,24 +231,6 @@ handle_options() {
       -- "$@"
    ) || exit 1
    eval set -- "$options"
-   
-   Key='' Noarea='' Grepopt=-ril Format='term' Return=''
-   Fontsize=12 Font='DejaVuSerif' Bold='DejaVuSerif-Bold' Input="$HOME/Contacts.vcf"
-   Paperwidth=210 Paperheight=297 Cols=3 Rows=8 LetterStyle='iso'
-   counter=false count='' Myccode='' Dot='' Blind=false
-   # shellcheck disable=SC2153
-   if [[ -n $PREFIX ]]; then
-      if [[ -e $PREFIX/contmgr.conf ]]; then
-         # shellcheck disable=SC1091
-         source "$PREFIX/contmgr.conf"
-      fi
-   else
-      Warn "Env var PREFIX is undefined; looking for ~/.contmgr.conf only"
-   fi
-   # shellcheck disable=SC1091
-   [[ -e $HOME/.contmgr.conf ]] && source "$HOME/.contmgr.conf"
-   [[ -n $Myccode ]] || Warn "You did not set Myccode in any configuration file"
-   [[ -n $Mylanguage ]] || Warn "You did not set Mylanguage in any configuration file"
    
    while true; do
       case $1 in
@@ -295,7 +310,7 @@ handle_options() {
 			;;
 # Format specific options (b, l, t and T specify relevant formats):
 
-      (-d|--dark)	# (t)   do not use color in terminal output
+      (-d|--dark)	# (t)   set colors for dark background
 			dark
 			shift
 			;;
@@ -318,14 +333,14 @@ handle_options() {
 			fi
 			shift 2
 			;;
-      (-N|--nocolor)    # (t)   set colors for dark background
+      (-N|--nocolor)    # (t)   do not use color in terminal output
 			nocolor
 			shift
 			;;        
       (-n|--noarea)	# (bl)  in phone numbers, remove area codes with the
 			#       value X, possibly prefixed with 0 (zero)
-			Noarea=${2#0}
-			[[ "${AreaCodes[*]}" =~ $Noarea ]] ||
+			Nodial=${2#0}
+			[[ "${AreaCodes[*]}" =~ $Nodial ]] ||
 			   die "Unrecognized value for --noarea option"
 			shift 2
 			;;
@@ -431,7 +446,7 @@ join() {
       [[ -n $1 ]] && x+="${sep}$1"
       shift
    done
-   echo "${x##${sep//\\/\\\\}}"
+   echo "${x##"${sep//\\/\\\\}"}"
 }
 
 :<<'DOC' #---------------------------------------------------------------------
@@ -502,6 +517,9 @@ pr_city() {
     (NL) # Netherlands
 	 echo -n "${1:0:4}$space${1:4:2} $2" # first 4 <space> last 2
 	 ;;
+    (DE) # Germany
+	 echo -n "$1 $2"
+	 ;;
     (IT) # Italy:
 	 echo -n "$1 $2 $3"
 	 ;;
@@ -516,47 +534,36 @@ pr_city() {
 :<<'DOC' #---------------------------------------------------------------------
 = fix
 synopsis:	 fix phonenumber
-description:	replace any |Myccode| with 0 and insert spaces in phone number;
-		argument is name of the number; for The Netherlands (31):
-		 Hphone=+31630333955
-		 fix Hphone && echo $Hphone # → 06 3033 3955
+description:	Use pnc to insert spaces in the phonenumber:
+		+31630333955 => +31 6 30333955
+		If the country code is that of the user's country, replace it,
+		plus the space after it, with 0. 
+		+31 6 30333955 => 06 30333955
+		If there are 6 or more digits at the end, insert a space in
+		their middle:
+		For other countries, the + is still there; replace it with 00.
+		Example, with Myccode=NL:
+		  x=+31630333955; fix x; echo $x => 06 3033 3955
+		  x=+32630333955; fix x; echo $x => 0032 6 3033 3955
 returns:	1 if the phone number is empty, else 0
 DOC
 #-------------------------------------------------------------------------------
 fix() {
-   local area i n p v
-   eval "p=\$$1"
-   [[ -z $p ]] && return 1
-   p=${p/+$Myccode/0}
-   p=${p/+/00}
-   case $p in
-   ('') eval "$1=''"
-	;;
-    (*) for i in "${AreaCodes[@]}"; do
-	   if [[ $p =~ ^0$i(.*) ]]; then
-	      area="0$i " n=${BASH_REMATCH[1]}
-	      [[ $area == "0$Noarea " ]] && area=''
-	      case ${#n} in
-	      (4)    v="$n"
-		     ;;
-	      (6|9)  v="${n:0:3} ${n:3:3} ${n:6:3}"
-		     ;;
-	      (7)    v="${n:0:3} ${n:3:4}"
-		     ;;
-	      (8|10) v="${n:0:4} ${n:4:4} ${n:8:2}"
-		     ;;
-	      (11)   v="${n:0:4} ${n:4:3} ${n:7:4}"
-		     ;;
-	      (*)    Warn "Invalid phone number: $area$n"
-		     v="$n"
-		     ;;
-	      esac
-	      eval "$1=\$area\${v% }"
-	   fi
-	done
-	;;
-   esac
+   local p
+   eval "p=\$$1" # example: p=HPhone
+   test -n "$p" || return 1
+   pnc valid "$p" || Warn "Invalid phone number: «$p»"
+   out="$(pnc format -f int "$p")"
+   out="${out/+$Mydial /0}"
+   # 6 or more digits at the end? Then put a space in the middle of them:
+   end=$(expr "$out" : '.* \([0-9]*\)')
+   if [[ ${#end} -ge 6 ]]; then
+      middle=$(( ${#end} / 2 ))
+      out="${out%"$end"}${end:0:middle} ${end:middle}"
+   fi
+   eval "$1=\${out/#+/00}\$ln"
 }
+
 
 :<<'DOC' #---------------------------------------------------------------------
 = texescape
@@ -597,7 +604,6 @@ description:	set named variable to value, but only if it's empty:
 		Example: setvar Hphone +31345652152 'home phone'
 DOC
 #-------------------------------------------------------------------------------
-Hphone='' Mphone='' Wphone='' Hmail='' Wmail='' # satisfy shellcheck
 setvar() {
    local current
    eval "current=\$$1"
@@ -693,7 +699,7 @@ pr_oneliner() {
    fix Hphone && printf "%s. " "$Hphone"
    fix Mphone && printf "%s. " "$Mphone"
    fix Wphone && printf "%s. " "$Wphone"
-   ) |fmt -110
+   ) |fmt -105
    echo
    echo
 }
@@ -814,10 +820,9 @@ pr_label() {
       done
       [[ -n $ext ]] && street="$ext\n$street"
       [[ -n $street$pobox ]] || continue
-      street=${street//#/\\#}
-      street=${street//_/\\_}
       name="$Prefix $First $Last $Middle $Suffix"
       trim name
+      for i in Org name street; do texescape $i; done
       echo "\\C"
       [[ -n $Org ]] && echo "$Org"
       [[ -n $name ]] && echo "$name"
@@ -845,18 +850,17 @@ pr_letter() {
       done
       [[ -n $ext ]] && street="$ext\n$street"
       [[ -n $street$pobox ]] || continue
-      street=${street//#/\\#}
-      street=${street//_/\\_}
       name="$Prefix $First $Last $Middle $Suffix"
       trim name
-      printf '\setupdocument{to={%%\n'
+      for i in Org name street; do texescape $i; done
+      printf '\\setupdocument{to={%%\n'
       [[ -n $name ]] && printf '\t%s\\\\\n' "$name"
       [[ -n $pobox ]] && printf '\t%s\\\\\n' "$pobox"
       [[ -n $street ]] && printf '\t%s\\\\\n\t' "$street"
       pr_city "$zip" "$city" "$state" "$ccode" 
       [[ -z $country ]] || printf '\\\\\n\t%s' "$country"
       printf '\n\t}, opening={Geachte %s %s}\n' "$Prefix" "$Last"
-      printf '}\Letter\n'
+      printf '}\\Letter\n'
    done 
 }
 
@@ -914,33 +918,41 @@ DOC
 pr_booklet() {
    $counter && ((count+=1))
    ((gray=!gray))
-   local G=('\G' '  ') g=${G[$gray]}
+   local i j pobox ext street zip city state ccode country
+   local G=('\G' '  ')
+   local g=${G[$gray]}
    local adr='' name="$Last $Suffix" org="$Org"
    [[ -z $name ]] && name="$org"
    texescape name
    texescape org
-   local i j street zip city state ccode
+
+   # addresses for column 2:
    for i in H W; do
-      for j in pobox ext street zip city state ccode ccode; do
+      for j in pobox ext street zip city state ccode; do
          eval $j="\$$i$j"
       done
+      country=''
+      [[ $ccode != $Myccode ]] && country=${Cname[$ccode]}
       # create an address only if there is a street or a PO box:
       if [[ -n $street$pobox ]]; then
-         adr+="$(join "\n" \
+         # initially, use | for newlines
+         adr+="$(join "|" \
              "$pobox" \
              "$ext" \
              "$street" \
              "$(pr_city "$zip" "$city" "$state" "$ccode")" \
-             "${Cname[${ccode%$Myccode}]}" "|"
+             "$country" \
+	     "[2ex]"
          )"
       fi
    done
    shopt -u nocasematch
-   adr=${adr%\\n|}
-   adr=${adr/|/[2ex]} # space between home and work address
-   adr=${adr//\\n/\\\\}
+   if [[ -n $adr ]]; then
+      adr=${adr:0:-6}	# remove final |[2ex]
+      adr=${adr//|/\\\\}	# | -> \\
+      texescape adr
+   fi
    shopt -s nocasematch
-   texescape adr
    fix Hphone
    fix Mphone
    fix Wphone
@@ -954,10 +966,10 @@ pr_booklet() {
       local x=()
       texescape Note
       IFS=$'|' read -ra x <<<"${Note//'\n'/|}"
-      printf '\\\\\Blu{%s}' "${x[@]}"
+      printf '\\\\\\Blu{%s}' "${x[@]}"
    fi
-   echo -n "&$adr&"
-   echo "\\EM{$(join "}\\\\\\EM{" "$Hphone" "$Mphone" "$Wphone" "$Hmail" "$Wmail")}\\NN"
+   phoneenmail="$(join '}\\\EM{' "$Hphone" "$Mphone" "$Wphone" "$Hmail" "$Wmail")}"
+   echo "&$adr&${phoneenmail:3}\\NN"
 }
 
 :<<'DOC' #---------------------------------------------------------------------
@@ -1080,6 +1092,7 @@ filltype() {
    done
 }
 
+Hphone='' Mphone='' Wphone='' Hmail='' Wmail='' # satisfy shellcheck
 # this works for dutch users only...
 AreaCodes=(
    6    10   13   15   20   23   24   26   30   33   35   36   38   40  
@@ -1096,46 +1109,10 @@ AreaCodes=(
    061  062  064  0352 0385 0599 01                                     
 )
 
-# declare -A acodes=(
-  # [AD]=376  [CD]=242  [FR]=33   [IT]=39   [MM]=95   [PM]=508  [TD]=235 
-  # [AE]=971  [CF]=236  [GA]=241  [JE]=44   [MN]=976  [PN]=64   [TF]=-   
-  # [AF]=93   [CG]=243  [GB]=44   [JO]=962  [MO]=853  [PS]=970  [TG]=228 
-  # [AL]=355  [CH]=41   [GE]=995  [JP]=81   [MQ]=596  [PT]=351  [TH]=66  
-  # [AM]=374  [CI]=225  [GF]=594  [KE]=254  [MR]=222  [PW]=680  [TJ]=992 
-  # [AO]=244  [CK]=682  [GG]=44   [KG]=996  [MT]=356  [PY]=595  [TK]=690 
-  # [AQ]=6721 [CL]=56   [GH]=233  [KH]=855  [MU]=230  [QA]=974  [TL]=670 
-  # [AR]=54   [CM]=237  [GI]=350  [KI]=686  [MV]=960  [RE]=262  [TM]=993 
-  # [AT]=43   [CN]=86   [GL]=299  [KM]=269  [MW]=265  [RO]=40   [TN]=216 
-  # [AU]=61   [CO]=57   [GM]=220  [KP]=850  [MX]=52   [RS]=381  [TO]=676 
-  # [AW]=297  [CR]=506  [GN]=224  [KR]=82   [MY]=60   [RU]=7    [TR]=90  
-  # [AZ]=994  [CU]=53   [GP]=590  [KW]=965  [MZ]=258  [RW]=250  [TV]=688 
-  # [BA]=387  [CV]=238  [GQ]=240  [KZ]=7    [NA]=264  [SA]=966  [TW]=886 
-  # [BD]=880  [CW]=599  [GR]=30   [LA]=856  [NC]=687  [SB]=677  [TZ]=255 
-  # [BE]=32   [CX]=61   [GS]=500  [LB]=961  [NE]=227  [SC]=248  [UA]=380 
-  # [BF]=226  [CY]=357  [GT]=502  [LI]=423  [NF]=6723 [SD]=249  [UG]=256 
-  # [BG]=359  [CZ]=420  [GW]=245  [LK]=94   [NG]=234  [SE]=46   [US]=1   
-  # [BH]=973  [DE]=49   [GY]=592  [LR]=231  [NI]=505  [SG]=65   [UY]=598 
-  # [BI]=257  [DJ]=253  [HK]=852  [LS]=266  [NL]=31   [SH]=290  [UZ]=998 
-  # [BJ]=229  [DK]=45   [HN]=504  [LT]=370  [NO]=47   [SI]=386  [VA]=379 
-  # [BL]=590  [DZ]=213  [HR]=385  [LU]=352  [NP]=977  [SJ]=47   [VE]=58  
-  # [BN]=673  [EC]=593  [HT]=509  [LV]=371  [NR]=674  [SK]=421  [VN]=84  
-  # [BO]=591  [EE]=372  [HU]=36   [LY]=218  [NU]=683  [SL]=232  [VU]=678 
-  # [BQ]=5997 [EG]=20   [ID]=62   [MA]=212  [NZ]=64   [SM]=378  [WF]=681 
-  # [BR]=55   [ER]=291  [IE]=353  [MC]=377  [OM]=968  [SN]=221  [WS]=685 
-  # [BT]=975  [ES]=34   [IL]=972  [MD]=373  [PA]=507  [SO]=252  [YE]=967 
-  # [BV]=47   [ET]=251  [IM]=44   [ME]=382  [PE]=51   [SR]=597  [YT]=262 
-  # [BW]=267  [FI]=358  [IN]=91   [MF]=590  [PF]=689  [SS]=211  [ZA]=27  
-  # [BY]=375  [FJ]=679  [IO]=246  [MG]=261  [PG]=675  [ST]=239  [ZM]=260 
-  # [BZ]=501  [FK]=500  [IQ]=964  [MH]=692  [PH]=63   [SV]=503  [ZW]=263 
-  # [CA]=1    [FM]=691  [IR]=98   [MK]=389  [PK]=92   [SY]=963           
-  # [CC]=61   [FO]=298  [IS]=354  [ML]=223  [PL]=48   [SZ]=268           
-# )
-
-declare -A Ccall
+declare -A Cdial
 declare -A Cname
-declare -A CCodes
-CCodes=(
-#     en      fr      es      it      nl
+declare -A CCodes=(
+#ccode en     fr      es      it      nl      dial
 [AD]="Andorra;Andorre;Andorra;Andorra;Andorra;376"
 [AE]="United Arab Emirates;Emirats Arabes Unis;Emiratos Árabes Unidos;Emirati Arabi Uniti;Verenigde Arabische Emiraten;971"
 [AF]="Afghanistan;Afghanistan;Afganistán;Afganistan;Afghanistan;93"
@@ -1388,17 +1365,6 @@ CCodes=(
 [ZW]="Zimbabwe;Zimbabwé;Zimbabue;Zimbabwe;Zimbabwe;263"
 )
 
-for i in "${!CCodes[@]}"; do
-  IFS=';' read -ra k <<<"${CCodes[$i]}"
-  Cname[$i]="${k[4]}"
-  Ccall[$i]="${k[-1]}"
-done
-
-# now  country="${Cname[DO]}" is like  country="Dominican Republic"
-# and callcode="${Ccall[DO}}" is like callcode="1809;1829;1849"
-
-Mycountry=${Cname[Myccode]}
-
 :<<'DOC' #---------------------------------------------------------------------
 = find_country
 synopsis:	find_country countrycode
@@ -1425,19 +1391,19 @@ find_country() {
    local country
    if [[ -z $1 ]]; then
       Warn "Missing country code, assuming $Myccode"
-      echo "$Myccode|${Ccall[$Myccode]}|${Cname[$Myccode]}"
+      echo "$Myccode|${Cdial[$Myccode]}|${Cname[$Myccode]}"
    else
       country=${Cname[$1]}
       if [[ -n $country ]]; then
          # if it is indeed a country code
-         echo "$1|${Ccall[$1]}|${country%$Mycountry}"
+         echo "$1|${Cdial[$1]}|${country%"$Mycountry"}"
       else
          # it may be a country name in one of the languages:
          country='Unknown'
          for i in "${!CCodes[@]}"; do
            if [[ ${CCodes[$i]} =~ $1\; ]]; then
               Warn "Replacing country name $1 with country code"
-              echo "$i|${Ccall[$i]}|${Cname[$i]%$Mycountry}"
+              echo "$i|${Cdial[$i]}|${Cname[$i]%$Mycountry}"
               return
            fi
          done
@@ -1462,17 +1428,7 @@ mobtest() {
    eval "n=\$$1"
    [[ -z $n ]] && return
    cell=false
-   # see areaphonecodes.com for completion: 
-   for i in 1[24579][0-8] 13[0-68] 16 18[0-7] 316[1-58] 324[5-9] 336 337[3-9] \
-	    34[67] 349690609 349690610 3497390 \
-	    3526[2679][18] 35265[1568] 35267[189] 352681 393[1-9] 447[45789] \
-            474[015-8] 4759 479 491[567] 599[3-79] 628[1-9]
-   do
-      if [[ $n =~ ^\+$i ]]; then
-         cell=true
-         break
-      fi
-   done
+   pnc info "$n" |grep -q mobile$ && cell=true
    if [[ $cell != "$3" ]]; then
       if $cell; then 
          Warn "$Disp: $2 phone $n looks like a mobile number"
@@ -1482,18 +1438,56 @@ mobtest() {
    fi
 }
 
+#========== start ==========
+   
+Key='' Nodial='' Grepopt=-ril Format='term' Return=''
+Fontsize=12 Font='DejaVuSerif' Bold='DejaVuSerif-Bold' Input="$HOME/Contacts.vcf"
+Paperwidth=210 Paperheight=297 Cols=3 Rows=8 LetterStyle='iso'
+counter=false count='' Myccode='' Mylanguage='' Dot='' Blind=false
+
+# shellcheck disable=SC2153
+if [[ -n $PREFIX ]]; then
+   if [[ -e $PREFIX/contmgr.conf ]]; then
+      # shellcheck disable=SC1091
+      source "$PREFIX/contmgr.conf"
+   fi
+else
+   Warn "Env var PREFIX is undefined; looking for ~/.contmgr.conf only"
+fi
+# shellcheck disable=SC1091
+[[ -e $HOME/.contmgr.conf ]] && source "$HOME/.contmgr.conf"
+[[ -n $Myccode ]] || Warn "You did not set Myccode in any configuration file"
+[[ -n ${CCodes[$Myccode]} ]] || die "The country code $Myccode is not recognized"
+(( Mylanguage=($(awk -v pat="$Myccode" 'BEGIN {print index("ENFRESITNL", pat)}')+1)/2 ))
+if [[ $Mylanguage == 0 ]]; then
+   Mylanguage=1
+   Warn "The language for country code $Myccode is not available" \
+	"Country names will be output in Enlish"
+else
+   ((Mylanguage--))
+fi
+
+for i in "${!CCodes[@]}"; do
+  IFS=';' read -ra k <<<"${CCodes[$i]}"
+  Cname[$i]="${k[$Mylanguage]}"
+  Cdial[$i]="${k[-1]}"
+done
+
+# now  country="${Cname[DO]}" is like  country="Dominican Republic"
+# and callcode="${Cdial[DO}}" is like callcode="1809;1829;1849"
+
+Mycountry=${Cname[$Myccode]}
+Mydial=${CCodes[$Myccode]##*;}
+
 light # start with colors for a light background
 
 handle_options "$@"
 set -- "${Args[@]}"
 
-command -v msort  >/dev/null || die "Please install msort"
-
 searchkey="$1"
 shopt -s nocasematch
 
 Input="$(eval "realpath '$Input'")" # eval allows use of ~
-[[ -n $Input ]] || die "environment var CONTACTS was empty and --input option not used"
 [[ -e $Input ]] || die "input file $Input not found"
 tmp="$(mktemp -dt "$Myname".XXXXXXXXXX)"
 
@@ -1678,12 +1672,12 @@ while read -r file; do
    esac
 done | sorter
 case $Format in
-(labels)  echo '\end{labels}\end{document}';;
-(letter)  echo '\end{document}';;
+(labels)  printf '\\end{labels}\\end{document}\n';;
+(letter)  printf '\\end{document}\n';;
 (term)    ;;
 (sorter)  ;;
 (vcard)   ;;
-(xml)     echo -e '</phonebook></phonebooks>';;
-(booklet) echo '\end{longtable}\end{document}';;
+(xml)     printf '</phonebook></phonebooks>\n';;
+(booklet) printf '\\end{longtable}\\end{document}\n';;
 esac
 rm -r "$tmp"
