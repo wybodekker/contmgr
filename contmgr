@@ -1,7 +1,9 @@
-#!/bin/bash
+#!/bin/zsh
 
 Myname="${0##*/}"
-Version=2.07
+Mypath="${0:A}"
+Version=2.08
+setopt rematchpcre
 
 :<<'DOC'
 = contmgr - list contacts for your terminal iPad, Fritz!Box, hand bag
@@ -35,7 +37,7 @@ contmgr [options] [searchkey]
 
 -d,--dark	(t) do not use color in terminal output
 -f,--font=X	(bl) set one or more of regular font, bold font, and pointsize.
-		Default: |X='DejaVuSerif,DejaVuSerif-Bold 12'|
+		Default: |X='DejaVuSerif,DejaVuSerif-Bold 10'|
 		Argument examples:
 		|'a,b 12' 'a,b' 'a' 'a 12' 'a, 12' ',b' '12'|
 		The last one (|'12'|) changes the pointsize only.
@@ -155,7 +157,7 @@ configuration file, either in system file: |$PREFIX/contmgr.conf| or in a
 user file: |$HOME/.contmgr.conf|.
 These files are read in this order and they can contain input such as this:
 
-   Fontsize=12
+   Fontsize=10
    Font='DejaVuSerif'
    Bold='DejaVuSerif-Bold'
    Input="$HOME/Contacts.vcf"
@@ -201,8 +203,8 @@ DOC
 
     die() { local i; for i; do echo -e "$Myname: $Red$dn: $i$Nor"; done 1>&2; exit 1; }
    Warn() { local i; for i; do displayname>/dev/null; echo -e "$Myname: $Mag$dn$i$Nor"; done 1>&2; }
-helpsrt() { sed -n '/^= Synopsis/,/^= /p' "$0"|sed '1d;$d'; exit; }
-helpall() { sed -n "/^:<<'DOC'$/,/^DOC/p" "$0"|sed '1d;$d'|
+helpsrt() { sed -n '/^= Synopsis/,/^= /p' "$Mypath"|sed '1d;$d'; exit; }
+helpall() { sed -n "/^:<<'DOC'$/,/^DOC/p" "$Mypath"|sed '1d;$d'|
             less -P"$Myname-${Version/./·} (press h for help, q to quit)";exit; }
 sorter() { cat; }
 
@@ -296,11 +298,12 @@ handle_options() {
 			Format=vcard
 			# sort by FN:
 			sorter() {
-			   msort --quiet \
+			   msort \
 			   --suppress-log \
 			   --block \
 			   --tag="FN:" \
-			   --fold-case
+			   --fold-case  \
+			   --quiet 2>/dev/null
 			}
 			shift
 			;;
@@ -315,14 +318,14 @@ handle_options() {
 			shift
 			;;
       (-f|--font)       # (bl)  set font and/or bold font and/or pointsize.
-			#       Default: X='DejaVuSerif,DejaVuSerif-Bold 12'
+			#       Default: X='DejaVuSerif,DejaVuSerif-Bold 10'
 			#       Argument examples:
 			#        'a,b 12' 'a,b' 'a' 'a 12' 'a, 12' ',b' '12'
 			#       The last one (|'12'|) changes the pointsize only.
 			if [[ $2 =~ ([[:alnum:]_-]*)(,[[:alnum:]_-]*)?( [0-9]+)?$ ]]; then
-			   f=${BASH_REMATCH[1]}
-			   b=${BASH_REMATCH[2]#,}
-			   s=${BASH_REMATCH[3]# }
+			   f=$match[1]
+			   b=${match[2]#,}
+			   s=${match[3]# }
 			  if [[ $f =~ ^[[:digit:]]+ ]]; then
 			     Fontsize="$f"
 			  else
@@ -508,7 +511,7 @@ pr_city() {
     (GB) # UK
 	 echo -ne "$2\n${1%???}$space${1: -3}" # all but last 3 <space> last 3
 	 ;;
-    (FR|ES|CH|AT|NO|DR|FI|HR|MC) # France, Spain, Switserland, Austria, ...
+    (FR|ES|CH|AT|NO|DR|FI|HR|MC|PT) # France, Spain, Switserland, Austria, ...
 	 echo -n "$1 $2" 
 	 ;;
     (BE) # Belgium
@@ -554,12 +557,12 @@ fix() {
    test -n "$p" || return 1
    pnc valid "$p" || Warn "Invalid phone number: «$p»"
    out="$(pnc format -f int "$p")"
-   out="${out/+$Mydial /0}"
+   out="${out/\+${Mydial} /0}"
    # 6 or more digits at the end? Then put a space in the middle of them:
    end=$(expr "$out" : '.* \([0-9]*\)')
    if [[ ${#end} -ge 6 ]]; then
       middle=$(( ${#end} / 2 ))
-      out="${out%"$end"}${end:0:middle} ${end:middle}"
+      out="${out%"$end"}${end[1,$middle]} ${end[$((middle + 1)),-1]}"
    fi
    eval "$1=\${out/#+/00}\$ln"
 }
@@ -573,10 +576,13 @@ description:	escape #, _, %, & in the variable named in the argument
 DOC
 #-------------------------------------------------------------------------------
 texescape() {
-   eval "$1=\${$1//#/\\\\#}
-   $1=\${$1//%/\\\\%}
-   $1=\${$1//&/\\\\&}
-   $1=\${$1//_/\\\\_}"
+  local escaped string
+  eval "string=\$$1"
+  for i in ${(s::)string}; do
+    [[ $i =~ [%#_\&] ]] && escaped+='\\'
+    escaped+="$i"
+  done
+  eval "$1=\$escaped"
 }
 
 :<<'DOC' #---------------------------------------------------------------------
@@ -589,12 +595,18 @@ description:	print Last, First (Organization), but clean up if some are empty.
 DOC
 #-------------------------------------------------------------------------------
 displayname() {
-   dn="$Last${Suffix:+ }$Suffix${Last:+, }$Prefix${Prefix:+ }$First${First:+ }$Middle${Middle:+ }$Nick${Nick:+ }${Org:+ (}$Org${Org:+)}"
-   dn="${dn# }"
-   dn="${dn% }"
-   [[ $dn =~ ^\((.*)\)$ ]] && dn=${BASH_REMATCH[1]}
+   local dn
+   dn="$Last $Suffix, $Prefix $First $Middle $Nick ${Org:+(}$Org${Org:+)}"
+   # Remove leading spaces and commas
+   dn="${dn#"${dn%%[! ,]*}"}"
+   # Remove trailing spaces and commas
+   dn="${dn%"${dn##*[! ,]}"}"
+   # reduce multiple spaces to 1
+   dn=${(S)dn//  */ }
+   # remove any space before a comma
+   dn=${dn// ,/,}
+   [[ $dn =~ '^\((.*)\)$' ]] && dn=$match[1] # remove () if they are at begin and end
    echo "${dn:-—no name—}"
-   [[ -n $dn ]] && dn="$dn: "
 }
 
 :<<'DOC' #---------------------------------------------------------------------
@@ -682,24 +694,29 @@ description:	print in oneliner terminal format
 DOC
 #-------------------------------------------------------------------------------
 pr_oneliner() {
+   fix Hphone
+   fix Wphone
+   fix Mphone
    hc=$(pr_city "$Hzip" "$Hcity" "$Hstate" "$Hccode" $Blind)
    wc=$(pr_city "$Wzip" "$Wcity" "$Wstate" "$Wccode" $Blind)
    h="$Hpobox, $Hext, $Hstreet, $hc, $Hcountry"
    w="$Wpobox, $Wext, $Wstreet, $wc, $Wcountry"
-   h=$(sed 's/\\n/, /g;s/\(, \)\+/, /g;s/^, //;s/, $//' <<<"$h")
-   w=$(sed 's/\\n/, /g;s/\(, \)\+/, /g;s/^, //;s/, $//' <<<"$w")
-   # shellcheck disable=SC2001
-   ( sed 's/\(, \)\+/, /g' <<<"$Disp, $Bday, $(pr_age)"
-   if [[ -n $h ]] && [[ -n $w ]]; then
-      echo -n "$h. "
-      echo -n "Werk: $w. "
-   elif [[ -n $h$w ]]; then
-      echo -n "$h$w. "
-   fi
-   fix Hphone && printf "%s. " "$Hphone"
-   fix Mphone && printf "%s. " "$Mphone"
-   fix Wphone && printf "%s. " "$Wphone"
-   ) |fmt -105
+   [[ $h = ', , , , ' ]] && h=''
+   [[ $w = ', , , , ' ]] && w=''
+   for i in \
+	"$Disp" \
+	"${Bday:+Born: }$Bday" \
+	"$(pr_age)" \
+	"${h:+Home: }$h" \
+	"${w:+Work: }$w" \
+   	"$Hphone" \
+   	"$Mphone" \
+   	"$Wphone"
+   do
+      [[ -n $i ]] && printf "%s. " "$i"
+   done |
+   sed 's/ ,//g;s/ \.//g' |
+   fmt -w 95
    echo
    echo
 }
@@ -778,7 +795,7 @@ pr_startletter() { local awa=''
    [[ -n $Return ]] && awa='\awa'
    cat <<-EOD
 	%!lualatex
-	\documentclass[12pt]{isodoc}
+	\documentclass{isodoc}
 	\usepackage{$LetterStyle}                                                              
 	\setupdocument{
 	    ourref = {${LetterReference:-===reference===}},
@@ -790,21 +807,21 @@ pr_startletter() { local awa=''
 	}}
 	\def\cleardoublepage{}
 	\begin{document}
+	\fontsize{$Fontsize}{$((Fontsize+2))}\selectfont
 	EOD
 }
 
 :<<'DOC' #---------------------------------------------------------------------
 = trim
-descrtiption:	trim and squeeze named variable
+description:	trim and squeeze named variable
 DOC
 #-------------------------------------------------------------------------------
 trim() {
   local x
-  shopt -s extglob
-  eval "x=\${$1%%+([[:space:]])}"
-  x="${x##+([[:space:]])}"
-  eval "$1=\${x//+([[:space:]])/ }"
-  shopt -u extglob
+  eval "x=\${$1%%+([[:space:]])}"	# get the value of the named argument
+  x=${(MS)x##[[:graph:]]*[[:graph:]]}	# trim spaces
+  while [[ $x == *"  "* ]]; do x="${x//  / }"; done # squeeze multiple spaces
+  eval "$1=\${x//+([[:space:]])/ }"	# put trimmed and squeezed value back
 }
 
 :<<'DOC' #---------------------------------------------------------------------
@@ -854,6 +871,7 @@ pr_letter() {
       trim name
       for i in Org name street; do texescape $i; done
       printf '\\setupdocument{to={%%\n'
+      [[ -n $Org ]] && printf '\t%s\\\\\n' "$Org"
       [[ -n $name ]] && printf '\t%s\\\\\n' "$name"
       [[ -n $pobox ]] && printf '\t%s\\\\\n' "$pobox"
       [[ -n $street ]] && printf '\t%s\\\\\n\t' "$street"
@@ -946,30 +964,28 @@ pr_booklet() {
          )"
       fi
    done
-   shopt -u nocasematch
    if [[ -n $adr ]]; then
       adr=${adr:0:-6}	# remove final |[2ex]
-      adr=${adr//|/\\\\}	# | -> \\
       texescape adr
    fi
-   shopt -s nocasematch
    fix Hphone
    fix Mphone
    fix Wphone
-   Hmail=${Hmail//_/\\_}
-   Wmail=${Wmail//_/\\_}
-   echo -n "$g\Red{$count $name} $Prefix $First"
+   texescape Hmail
+   texescape Wmail
+   echo -n "$g\\Red{$count $name} $Prefix $First"
    [[ -n $Middle ]] && echo -n " $Middle"
    [[ -n $Nick ]] && echo -n " $Nick"
    [[ -n $org ]] && [[ $name != "$org" ]] && echo -n " ($org)"
    if [[ -n $Note ]]; then
       local x=()
       texescape Note
-      IFS=$'|' read -ra x <<<"${Note//'\n'/|}"
+      IFS=$'|' read -A x <<<"${Note//'\n'/|}"
       printf '\\\\\\Blu{%s}' "${x[@]}"
    fi
-   phoneenmail="$(join '}\\\EM{' "$Hphone" "$Mphone" "$Wphone" "$Hmail" "$Wmail")}"
-   echo "&$adr&${phoneenmail:3}\\NN"
+   phoneenmail="$(join '}|\\EM{' "$Hphone" "$Mphone" "$Wphone" "$Hmail" "$Wmail")}"
+   local out="&$adr&${phoneenmail:2}\\NN"
+   echo ${out//|/\\\\\\\\}
 }
 
 :<<'DOC' #---------------------------------------------------------------------
@@ -1006,7 +1022,7 @@ pr_xml() {
 	  </person>
 	EOD
       echo "  <telephony nid=\"$n\">"
-      for ((i=0;i<n;i++)); do
+      for ((i=1;i<=n;i++)); do
          echo "    <number type=\"${t[$i]}\" id=\"$i\">${p[$i]}</number>"
       done
    fi
@@ -1016,7 +1032,7 @@ pr_xml() {
    [[ -n $Wmail ]] && { p+=("$Wmail"); t+=('business'); ((n++)); }
    if [[ $n -gt 0 ]]; then
       echo "  <services nid=\"$n\">"
-      for ((i=0;i<n;i++)); do
+      for ((i=1;i<=n;i++)); do
          echo "    <email classifier=\"${t[$i]}\" id=\"$i\">${p[$i]}</email>"
       done
       echo "  </services>"
@@ -1400,7 +1416,7 @@ find_country() {
       else
          # it may be a country name in one of the languages:
          country='Unknown'
-         for i in "${!CCodes[@]}"; do
+         for i in "${(@k)CCodes}"; do
            if [[ ${CCodes[$i]} =~ $1\; ]]; then
               Warn "Replacing country name $1 with country code"
               echo "$i|${Cdial[$i]}|${Cname[$i]%$Mycountry}"
@@ -1441,9 +1457,9 @@ mobtest() {
 #========== start ==========
    
 Key='' Nodial='' Grepopt=-ril Format='term' Return=''
-Fontsize=12 Font='DejaVuSerif' Bold='DejaVuSerif-Bold' Input="$HOME/Contacts.vcf"
+Fontsize=10 Font='DejaVuSerif' Bold='DejaVuSerif-Bold' Input="$HOME/Contacts.vcf"
 Paperwidth=210 Paperheight=297 Cols=3 Rows=8 LetterStyle='iso'
-counter=false count='' Myccode='' Mylanguage='' Dot='' Blind=false
+counter=false count='' Myccode='' Dot='' Blind=false Languages=(US FR ES IT NL)
 
 # shellcheck disable=SC2153
 if [[ -n $PREFIX ]]; then
@@ -1458,17 +1474,16 @@ fi
 [[ -e $HOME/.contmgr.conf ]] && source "$HOME/.contmgr.conf"
 [[ -n $Myccode ]] || Warn "You did not set Myccode in any configuration file"
 [[ -n ${CCodes[$Myccode]} ]] || die "The country code $Myccode is not recognized"
-(( Mylanguage=($(awk -v pat="$Myccode" 'BEGIN {print index("ENFRESITNL", pat)}')+1)/2 ))
-if [[ $Mylanguage == 0 ]]; then
+
+Mylanguage=${Languages[(i)$Myccode]}
+if [[ $Mylanguage > $#Languages ]]; then
    Mylanguage=1
    Warn "The language for country code $Myccode is not available" \
-	"Country names will be output in Enlish"
-else
-   ((Mylanguage--))
+	"Country names will be output in US English"
 fi
 
-for i in "${!CCodes[@]}"; do
-  IFS=';' read -ra k <<<"${CCodes[$i]}"
+for i in "${(@k)CCodes}"; do
+  IFS=';' read -A k <<<"${CCodes[$i]}"
   Cname[$i]="${k[$Mylanguage]}"
   Cdial[$i]="${k[-1]}"
 done
@@ -1485,7 +1500,7 @@ handle_options "$@"
 set -- "${Args[@]}"
 
 searchkey="$1"
-shopt -s nocasematch
+# searches are case-insensitive by default in zsh #shopt -s nocasematch
 
 Input="$(eval "realpath '$Input'")" # eval allows use of ~
 [[ -e $Input ]] || die "input file $Input not found"
@@ -1546,37 +1561,37 @@ while read -r file; do
    while IFS= read -r line; do
       Type=''
       if [[ $line =~ TYPE=([[:alpha:]]*) ]]; then
-         Type="${BASH_REMATCH[1]}"
+         Type="$match[1]"
          line=${line/;TYPE=$Type/}
       fi
       if [[ $line =~ ^N:(.*)\;(.*)\;(.*)\;(.*)\;(.*) ]]; then
-         Last=${BASH_REMATCH[1]}
-         First=${BASH_REMATCH[2]}
-         Middle=${BASH_REMATCH[3]}
-         Prefix=${BASH_REMATCH[4]}
-         Suffix=${BASH_REMATCH[5]}
+         Last=$match[1]
+         First=$match[2]
+         Middle=$match[3]
+         Prefix=$match[4]
+         Suffix=$match[5]
       elif [[ $line =~ ^NICKNAME:(.*) ]]; then
          # shellcheck disable=SC1111
-         Nick="“${BASH_REMATCH[1]}”"
+         Nick="“$match[1]”"
       elif [[ $line =~ ^END:VCARD ]]; then
          Disp=$(displayname)
          break
       elif [[ $line =~ ^ORG:(.*) ]]; then
-         Org=${BASH_REMATCH[1]%;}
+         Org=${match[1]%;}
       elif [[ $line =~ ^URL*:(.*) ]]; then
-         Url=${BASH_REMATCH[1]}
+         Url=$match[1]
       elif [[ $line =~ ^BDAY.*:(.*) ]]; then
-         Bday=${BASH_REMATCH[1]}
+         Bday=$match[1]
       elif [[ $line =~ ^EMAIL:(.*) ]]; then
-         m="${BASH_REMATCH[1]}"
+         m="$match[1]"
          if validateemail "$m"; then
             [[ -z $Type ]] && filltype ehome ework
             # shellcheck disable=SC2034
             case $Type in
-            (home) ehome=1
+            (HOME) ehome=1
                    setvar Hmail "$m" 'home email'
                    ;;
-            (work) ework=1
+            (WORK) ework=1
                    setvar Wmail "$m" 'work email'
                    ;;
                (*) Warn "Skipping email address $m: unrecognized type ($Type)"
@@ -1586,28 +1601,28 @@ while read -r file; do
          filltype ahome awork
          # shellcheck disable=SC2034
          case $Type in
-         (home)
+         (HOME)
              ahome=1
-	     Hpobox="${BASH_REMATCH[1]}"
-             Hext="${BASH_REMATCH[2]}"
-             Hstreet="${BASH_REMATCH[3]}"
-             Hcity="${BASH_REMATCH[4]}"
-             Hstate="${BASH_REMATCH[5]}"
-             Hzip="${BASH_REMATCH[6]^^}"
+	     Hpobox="$match[1]"
+             Hext="$match[2]"
+             Hstreet="$match[3]"
+             Hcity="$match[4]"
+             Hstate="$match[5]"
+             Hzip="${(U)match[6]}"
              Hzip="${Hzip// /}"
-             IFS='|' read -r Hccode Hcall Hcountry <<<"$(find_country "${BASH_REMATCH[7]}")"
+             IFS='|' read -r Hccode Hcall Hcountry <<<"$(find_country "${match[7]}")"
 	     [[ $Hccode == "$Myccode" ]] && Hcountry=''
              ;;
-         (work)
+         (WORK)
              awork=1
-             Wpobox="${BASH_REMATCH[1]}"
-             Wext="${BASH_REMATCH[2]}"
-             Wstreet="${BASH_REMATCH[3]}"
-             Wcity="${BASH_REMATCH[4]}"
-             Wstate="${BASH_REMATCH[5]}"
-             Wzip="${BASH_REMATCH[6]^^}"
+             Wpobox="$match[1]"
+             Wext="$match[2]"
+             Wstreet="$match[3]"
+             Wcity="$match[4]"
+             Wstate="$match[5]"
+             Wzip="${(U)match[6]}"
              Wzip="${Wzip// /}"
-             IFS='|' read -r Wccode Wcall Wcountry <<<"$(find_country "${BASH_REMATCH[7]}")"
+             IFS='|' read -r Wccode Wcall Wcountry <<<"$(find_country "${match[7]}")"
 	     [[ $Wccode == "$Myccode" ]] && Wcountry=''
              ;;
         ('') Warn "Already have home and work addresses, skipping $line"
@@ -1615,26 +1630,26 @@ while read -r file; do
          (*) Warn "Skipping address $line of unrecognized type ($Type)"
          esac
       elif [[ $line =~ ^CATEGORIES:(.*)$ ]]; then
-         IFS=, read -ra Keys <<<"${BASH_REMATCH[1]}"
+         IFS=, read -A Keys <<<"$match[1]"
       elif [[ $line =~ ^TITLE: ]]; then
          # skip: TITLE lines are copied from CATEGORIES to make the latter searchable
          continue
       elif [[ $line =~ ^TEL:(.*) ]]; then
-         v="${BASH_REMATCH[1]}"
-         if [[ ! $v =~ ^(11|14|\+)[0-9]+$ ]]; then
+         v="$match[1]"
+         if [[ ! $v =~ ^(11|14|[+])[0-9]+$ ]]; then
             Warn "phone number $v has wrong format"
          fi
          # v is now 11n or 114 or +nnnnn...
          filltype phome pwork pcell
          # shellcheck disable=SC2034
          case $Type in
-         (home) phome=1 # remember that home phone was set
+         (HOME) phome=1 # remember that home phone was set
                 setvar Hphone "$v" 'home phone'
                 ;;
-         (work) pwork=1 # remember that work phone was set
+         (WORK) pwork=1 # remember that work phone was set
                 setvar Wphone "$v" 'work phone'
                 ;;
-         (cell) pcell=1 # remember that cell phone was set
+         (CELL) pcell=1 # remember that cell phone was set
                 setvar Mphone "$v" 'cell phone'
                 ;;
            ('') Warn "Already have home, mobile and work phone numbers, skipping $v"
@@ -1642,7 +1657,7 @@ while read -r file; do
             (*) Warn "Skipping phone number ($v) of unrecognized type ($Type)"
          esac
       elif [[ $line =~ ^NOTE:(.*) ]]; then
-         Note=${BASH_REMATCH[1]}
+         Note=$match[1]
       elif [[ $line =~ ^FN: ]]; then
          true
       elif [[ $Format != vcard ]]; then
