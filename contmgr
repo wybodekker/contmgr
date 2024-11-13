@@ -2,7 +2,7 @@
 
 Myname="${0##*/}"
 Mypath="${0:A}"
-Version=2.08
+Version=2.09
 setopt rematchpcre
 
 :<<'DOC'
@@ -366,7 +366,7 @@ handle_options() {
 			Blind=true
 			shift
 			;;
-      (-I)		instscript "$0" ||
+      (-I)		instscript "$Mypath" ||
 			   die 'the -I option is for developers only'
 			exit
 			;;
