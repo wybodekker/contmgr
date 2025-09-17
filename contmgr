@@ -195,7 +195,7 @@ Finally, the |n|'s are spaced, depending on the number of |n|'s.
 Problem: the |AreaCodes| array is valid for the Netherlands only.
 
 = Author
-[Wybo Dekker](wybo@dekkerdocumenten.nl)
+[Wybo Dekker](wybodekker@me.com)
 
 = Copyright
 Released under the [GNU General Public License](www.gnu.org/copyleft/gpl.html)
@@ -552,8 +552,7 @@ returns:	1 if the phone number is empty, else 0
 DOC
 #-------------------------------------------------------------------------------
 fix() {
-   local p
-   eval "p=\$$1" # example: p=HPhone
+   local -n p="$1"
    test -n "$p" || return 1
    pnc valid "$p" || Warn "Invalid phone number: «$p»"
    out="$(pnc format -f int "$p")"
