@@ -2,7 +2,7 @@
 
 Myname="${0##*/}"
 Mypath="${0:A}"
-Version=2.09
+Version=2.10
 setopt rematchpcre
 
 :<<'DOC'
@@ -202,7 +202,7 @@ Released under the [GNU General Public License](www.gnu.org/copyleft/gpl.html)
 DOC
 
     die() { local i; for i; do echo -e "$Myname: $Red$dn: $i$Nor"; done 1>&2; exit 1; }
-   Warn() { local i; for i; do displayname>/dev/null; echo -e "$Myname: $Mag$dn$i$Nor"; done 1>&2; }
+   Warn() { local i; for i; do echo -e "$Myname: $Mag$dn$i$Nor"; done 1>&2; }
 helpsrt() { sed -n '/^= Synopsis/,/^= /p' "$Mypath"|sed '1d;$d'; exit; }
 helpall() { sed -n "/^:<<'DOC'$/,/^DOC/p" "$Mypath"|sed '1d;$d'|
             less -P"$Myname-${Version/./·} (press h for help, q to quit)";exit; }
@@ -552,18 +552,21 @@ returns:	1 if the phone number is empty, else 0
 DOC
 #-------------------------------------------------------------------------------
 fix() {
-   local -n p="$1"
-   test -n "$p" || return 1
+   local p="${(P)1}"
+   [[ -z "$p" ]] && return 1
    pnc valid "$p" || Warn "Invalid phone number: «$p»"
-   out="$(pnc format -f int "$p")"
+   
+   local out="$(pnc format -f int "$p")"
    out="${out/\+${Mydial} /0}"
    # 6 or more digits at the end? Then put a space in the middle of them:
-   end=$(expr "$out" : '.* \([0-9]*\)')
-   if [[ ${#end} -ge 6 ]]; then
-      middle=$(( ${#end} / 2 ))
-      out="${out%"$end"}${end[1,$middle]} ${end[$((middle + 1)),-1]}"
+   local end="${out##* }"
+   if (( ${#end} >= 6 )); then
+      local middle=$(( ${#end} / 2 ))
+      out="${out%"$end"}${end[1,$middle]} ${end[$((middle+1)),-1]}"
    fi
-   eval "$1=\${out/#+/00}\$ln"
+   
+  # write back new value to the original variable
+  : ${(P)1::="${out/#+/00}$ln"}
 }
 
 
@@ -1098,7 +1101,7 @@ description:	Set Type to the first argument for which the corresponding
 		thus, in the absence of type indicators
 		the first two addresses are home and work
 		the first two emails are home and work
-		the first three phonenrs are home, work. and celll
+		the first three phone nrs are home, work. and cell
 DOC
 #-------------------------------------------------------------------------------
 filltype() {
@@ -1596,33 +1599,36 @@ while read -r file; do
                (*) Warn "Skipping email address $m: unrecognized type ($Type)"
             esac
          fi
-      elif [[ $line =~ ^ADR:(.*)\;(.*)\;(.*)\;(.*)\;(.*)\;(.*)\;(.*)$ ]]; then
+      elif [[ $line =~ ^ADR: ]]; then
          filltype ahome awork
-         # shellcheck disable=SC2034
          case $Type in
          (HOME)
              ahome=1
-	     Hpobox="$match[1]"
-             Hext="$match[2]"
-             Hstreet="$match[3]"
-             Hcity="$match[4]"
-             Hstate="$match[5]"
-             Hzip="${(U)match[6]}"
+             IFS=';' read -r Hpobox Hext Hstreet Hcity Hstate Hzip Hcountry <<<"${line#ADR:}"
+             Hzip="${(U)Hzip}"
              Hzip="${Hzip// /}"
-             IFS='|' read -r Hccode Hcall Hcountry <<<"$(find_country "${match[7]}")"
-	     [[ $Hccode == "$Myccode" ]] && Hcountry=''
+             IFS='|' read -r Hccode Hcall Hcountry <<<"$(find_country "$Hcountry")"
+             [[ $Hccode == "$Myccode" ]] && Hcountry=''
+             # iCloud Contacts exports move ext to end of street with \n in between
+             # we correct this here
+             if [[ -z $Hext && "$Hstreet" == *\\n* ]]; then
+               Hext="${Hstreet#*\\n}"
+               Hstreet="${Hstreet%%\\n*}"
+             fi
              ;;
          (WORK)
              awork=1
-             Wpobox="$match[1]"
-             Wext="$match[2]"
-             Wstreet="$match[3]"
-             Wcity="$match[4]"
-             Wstate="$match[5]"
-             Wzip="${(U)match[6]}"
+             IFS=';' read -r Wpobox Wext Wstreet Wcity Wstate Wzip Wcountry <<<"${line#ADR:}"
+             Wzip="${(U)Wzip}"
              Wzip="${Wzip// /}"
-             IFS='|' read -r Wccode Wcall Wcountry <<<"$(find_country "${match[7]}")"
-	     [[ $Wccode == "$Myccode" ]] && Wcountry=''
+             IFS='|' read -r Wccode Wcall Wcountry <<<"$(find_country "$Wcountry")"
+             [[ $Wccode == "$Myccode" ]] && Wcountry=''
+             # iCloud Contacts exports move ext to end of street with \n in between
+             # we correct this here
+             if [[ -z $Wext && "$Wstreet" == *\\n* ]]; then
+               Wext="${Wstreet#*\\n}"
+               Wstreet="${Wstreet%%\\n*}"
+             fi
              ;;
         ('') Warn "Already have home and work addresses, skipping $line"
              ;;
